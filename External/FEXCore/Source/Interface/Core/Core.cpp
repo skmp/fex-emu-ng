@@ -621,6 +621,7 @@ namespace FEXCore::Context {
 
       Thread->OpDispatcher->BeginFunction(GuestRIP, CodeBlocks);
 
+Thread->OpDispatcher->cmpOp=false;
       for (size_t j = 0; j < CodeBlocks->size(); ++j) {
         FEXCore::Frontend::Decoder::DecodedBlocks const &Block = CodeBlocks->at(j);
         // Set the block entry point
@@ -636,6 +637,9 @@ namespace FEXCore::Context {
           TableInfo = Block.DecodedInstructions[i].TableInfo;
           DecodedInfo = &Block.DecodedInstructions[i];
 
+          Thread->OpDispatcher->_GuestOp(Block.Entry + BlockInstructionsLength);
+Thread->OpDispatcher->cmpOp2=Thread->OpDispatcher->cmpOp;
+          Thread->OpDispatcher->cmpOp=false;
           if (TableInfo->OpcodeDispatcher) {
             auto Fn = TableInfo->OpcodeDispatcher;
             std::invoke(Fn, Thread->OpDispatcher, DecodedInfo);
@@ -683,7 +687,7 @@ namespace FEXCore::Context {
       // Run the passmanager over the IR from the dispatcher
       Thread->PassManager->Run(Thread->OpDispatcher.get());
 
-      if (Thread->OpDispatcher->ShouldDump) {
+      if (Thread->OpDispatcher->ShouldDump || GuestRIP == 0x0000000006eff00 || GuestRIP == 0x6f017b) {
         std::stringstream out;
         auto NewIR = Thread->OpDispatcher->ViewIR();
         FEXCore::IR::Dump(&out, &NewIR, Thread->PassManager->GetRAPass());

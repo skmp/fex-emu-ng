@@ -77,6 +77,19 @@
       "OpClass": "Misc"
     },
 
+    "InvalidateFlags": {
+      "OpClass": "Misc",
+      "HasSideEffects": true
+    },
+
+    "GuestOp": {
+      "OpClass": "Misc",
+      "HasSideEffects": true,
+      "Args": [
+        "uint64_t", "RIP"
+      ]
+    },
+
     "EndBlock": {
       "HasSideEffects": true,
       "OpClass": "Misc",

@@ -23,6 +23,10 @@ class OpDispatchBuilder final : public IREmitter {
 friend class FEXCore::IR::Pass;
 friend class FEXCore::IR::PassManager;
 public:
+  bool cmpOp = false;
+  bool cmpOp2 = false;
+  OrderedNode* cmpDest, *cmpSrc;
+
   FEXCore::Context::Context *CTX{};
   bool ShouldDump {false};
 

@@ -146,6 +146,8 @@ void OpDispatchBuilder::NOPOp(OpcodeArgs) {
 void OpDispatchBuilder::RETOp(OpcodeArgs) {
   uint8_t GPRSize = CTX->Config.Is64BitMode ? 8 : 4;
 
+  _InvalidateFlags();
+  
   auto Constant = _Constant(GPRSize);
 
   auto OldSP = _LoadContext(GPRSize, offsetof(FEXCore::Core::CPUState, gregs[FEXCore::X86State::REG_RSP]), GPRClass);
@@ -389,6 +391,9 @@ void OpDispatchBuilder::CALLOp(OpcodeArgs) {
   uint8_t GPRSize = CTX->Config.Is64BitMode ? 8 : 4;
 
   BlockSetRIP = true;
+
+  _InvalidateFlags();
+
   auto ConstantPC = _Constant(Op->PC + Op->InstSize);
 
   OrderedNode *JMPPCOffset = LoadSource(GPRClass, Op, Op->Src[0], Op->Flags, -1);
@@ -1049,6 +1054,9 @@ void OpDispatchBuilder::CMPOp(OpcodeArgs) {
   }
 
   GenerateFlags_SUB(Op, Result, _Bfe(Bits, 0, Dest), _Bfe(Bits, 0, Src));
+  cmpOp = true;
+  cmpDest = Dest;
+  cmpSrc = Src;
 }
 
 void OpDispatchBuilder::CQOOp(OpcodeArgs) {
@@ -1275,6 +1283,8 @@ void OpDispatchBuilder::MOVSegOp(OpcodeArgs) {
 void OpDispatchBuilder::MOVOffsetOp(OpcodeArgs) {
   OrderedNode *Src;
 
+  cmpOp = cmpOp2;
+
   switch (Op->OP) {
   case 0xA0:
   case 0xA1:
@@ -1438,6 +1448,20 @@ void OpDispatchBuilder::CMOVOp(OpcodeArgs) {
     }
 
     case COMPARE_OTHER: break;
+    }
+  }
+
+  if (cmpOp2) {
+
+    if (Op->OP == 0x4F) {
+      _GuestOp(0x4F);
+      SrcCond = _Select(FEXCore::IR::COND_SGT, cmpDest, cmpSrc, Src, Dest);
+      printf("SGT OPT!\n");
+    } else if (Op->OP == 0x4E) {
+      _GuestOp(0x4E);
+
+      SrcCond = _Select(FEXCore::IR::COND_SLE, cmpDest, cmpSrc, Src, Dest);
+      printf("SLE OPT!\n");
     }
   }
 
@@ -4876,6 +4900,7 @@ template<uint32_t SrcIndex>
 void OpDispatchBuilder::MOVGPROp(OpcodeArgs) {
   OrderedNode *Src = LoadSource(GPRClass, Op, Op->Src[SrcIndex], Op->Flags, 1);
   StoreResult(GPRClass, Op, Src, 1);
+  cmpOp = cmpOp2;
 }
 
 void OpDispatchBuilder::MOVVectorOp(OpcodeArgs) {

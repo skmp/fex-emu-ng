@@ -231,6 +231,10 @@ bool ConstProp::Run(IREmitter *IREmit) {
           // A BFE that extracts all bits results in original value
           IREmit->ReplaceAllUsesWithInclusive(CodeNode, Op->Header.Args[0].GetNode(ListBegin), CodeBegin, CodeLast);
           Changed = true;
+        } else if (Op->Header.Args[0].GetNode(ListBegin)->Op(DataBegin)->Op == OP_SELECT && IROp->Size == Op->Header.Args[0].GetNode(ListBegin)->Op(DataBegin)->Size && Op->Width == 1 && Op->lsb == 0 ) {
+          // A BFE that extracts all bits results in original value
+          IREmit->ReplaceAllUsesWithInclusive(CodeNode, Op->Header.Args[0].GetNode(ListBegin), CodeBegin, CodeLast);
+          Changed = true;
         }
 
       break;

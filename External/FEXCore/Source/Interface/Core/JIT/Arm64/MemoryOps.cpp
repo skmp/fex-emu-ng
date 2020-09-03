@@ -601,8 +601,8 @@ void JITCore::RegisterMemoryHandlers() {
   REGISTER_OP(STOREFLAG,           StoreFlag);
   REGISTER_OP(LOADMEM,             LoadMem);
   REGISTER_OP(STOREMEM,            StoreMem);
-  REGISTER_OP(LOADMEMTSO,          LoadMemTSO);
-  REGISTER_OP(STOREMEMTSO,         StoreMemTSO);
+  REGISTER_OP(LOADMEMTSO,          LoadMem);
+  REGISTER_OP(STOREMEMTSO,         StoreMem);
   REGISTER_OP(VLOADMEMELEMENT,     VLoadMemElement);
   REGISTER_OP(VSTOREMEMELEMENT,    VStoreMemElement);
 #undef REGISTER_OP
