@@ -621,7 +621,7 @@ namespace FEXCore::Context {
 
       Thread->OpDispatcher->BeginFunction(GuestRIP, CodeBlocks);
 
-Thread->OpDispatcher->cmpOp=false;
+Thread->OpDispatcher->cmpOp2=false;
       for (size_t j = 0; j < CodeBlocks->size(); ++j) {
         FEXCore::Frontend::Decoder::DecodedBlocks const &Block = CodeBlocks->at(j);
         // Set the block entry point
@@ -638,8 +638,7 @@ Thread->OpDispatcher->cmpOp=false;
           DecodedInfo = &Block.DecodedInstructions[i];
 
           Thread->OpDispatcher->_GuestOp(Block.Entry + BlockInstructionsLength);
-Thread->OpDispatcher->cmpOp2=Thread->OpDispatcher->cmpOp;
-          Thread->OpDispatcher->cmpOp=false;
+
           if (TableInfo->OpcodeDispatcher) {
             auto Fn = TableInfo->OpcodeDispatcher;
             std::invoke(Fn, Thread->OpDispatcher, DecodedInfo);

@@ -594,6 +594,33 @@ void OpDispatchBuilder::CondJUMPOp(OpcodeArgs) {
     default: LogMan::Msg::A("Unknown Jmp Op: 0x%x\n", Op->OP); return;
   }
 
+  if (cmpOp2) {
+    //printf("%08X OP\n", Op->OP);
+    if (Op->OP == 0x7F || Op->OP == 0x8F) {
+      SrcCond = _Select(FEXCore::IR::COND_SGT, cmpDest, cmpSrc, TakeBranch, DoNotTakeBranch);
+      //printf("JCC SGT OPT!\n");
+    }
+
+    if (Op->OP == 0x7E || Op->OP == 0x8E) {
+      SrcCond = _Select(FEXCore::IR::COND_SLE, cmpDest, cmpSrc, TakeBranch, DoNotTakeBranch);
+      //printf("JCC SLE OPT!\n");
+    }
+
+    if (Op->OP == 0x7C || Op->OP == 0x8C) {
+      SrcCond = _Select(FEXCore::IR::COND_SLT, cmpDest, cmpSrc, TakeBranch, DoNotTakeBranch);
+      //printf("JCC SLE OPT!\n");
+    }
+
+    if (Op->OP == 0x74 || Op->OP == 0x84) {
+      SrcCond = _Select(FEXCore::IR::COND_EQ, cmpDest, cmpSrc, TakeBranch, DoNotTakeBranch);
+     // printf("JCC EQ OPT!\n");
+    }
+
+    if (Op->OP == 0x75 || Op->OP == 0x85) {
+      SrcCond = _Select(FEXCore::IR::COND_NEQ, cmpDest, cmpSrc, TakeBranch, DoNotTakeBranch);
+      //printf("JCC NE OPT!\n");
+    }
+  }
   LogMan::Throw::A(Op->Src[0].TypeNone.Type == FEXCore::X86Tables::DecodedOperand::TYPE_LITERAL, "Src1 needs to be literal here");
 
   uint64_t Target = Op->PC + Op->InstSize + Op->Src[0].TypeLiteral.Literal;
@@ -1054,7 +1081,7 @@ void OpDispatchBuilder::CMPOp(OpcodeArgs) {
   }
 
   GenerateFlags_SUB(Op, Result, _Bfe(Bits, 0, Dest), _Bfe(Bits, 0, Src));
-  cmpOp = true;
+  cmpOp2 = true;
   cmpDest = Dest;
   cmpSrc = Src;
 }
@@ -1282,8 +1309,6 @@ void OpDispatchBuilder::MOVSegOp(OpcodeArgs) {
 
 void OpDispatchBuilder::MOVOffsetOp(OpcodeArgs) {
   OrderedNode *Src;
-
-  cmpOp = cmpOp2;
 
   switch (Op->OP) {
   case 0xA0:
@@ -4074,9 +4099,11 @@ void OpDispatchBuilder::ResetWorkingList() {
 
 template<unsigned BitOffset>
 void OpDispatchBuilder::SetRFLAG(OrderedNode *Value) {
+  cmpOp2 = false;
   _StoreFlag(Value, BitOffset);
 }
 void OpDispatchBuilder::SetRFLAG(OrderedNode *Value, unsigned BitOffset) {
+  cmpOp2 = false;
   _StoreFlag(Value, BitOffset);
 }
 
@@ -4900,7 +4927,6 @@ template<uint32_t SrcIndex>
 void OpDispatchBuilder::MOVGPROp(OpcodeArgs) {
   OrderedNode *Src = LoadSource(GPRClass, Op, Op->Src[SrcIndex], Op->Flags, 1);
   StoreResult(GPRClass, Op, Src, 1);
-  cmpOp = cmpOp2;
 }
 
 void OpDispatchBuilder::MOVVectorOp(OpcodeArgs) {
