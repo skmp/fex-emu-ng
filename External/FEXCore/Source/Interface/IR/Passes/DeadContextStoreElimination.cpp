@@ -541,7 +541,7 @@ bool RCLSE::RedundantStoreLoadElimination(FEXCore::IR::IREmitter *IREmit) {
                  LastClass == Op->Class &&
                  LastOffset == Op->Offset &&
                  LastSize == IROp->Size &&
-                 Info->Accessed == ACCESS_READ) {
+                 (Info->Accessed == ACCESS_READ || Info->Accessed == ACCESS_PARTIAL_READ)) {
           // Did we read and then read again?
           IREmit->ReplaceAllUsesWithInclusive(CodeNode, LastNode, CodeBegin, CodeLast);
           RecordAccess(Info, Op->Class, Op->Offset, IROp->Size, ACCESS_READ, LastNode);
