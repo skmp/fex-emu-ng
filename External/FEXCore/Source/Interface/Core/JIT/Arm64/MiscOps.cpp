@@ -73,6 +73,8 @@ void JITCore::RegisterMiscHandlers() {
   REGISTER_OP(BREAK,      Break);
   REGISTER_OP(PHI,        NoOp);
   REGISTER_OP(PHIVALUE,   NoOp);
+  REGISTER_OP(GUESTOP,   NoOp);
+  REGISTER_OP(INVALIDATEFLAGS,   NoOp);
   REGISTER_OP(PRINT,      Unhandled);
 #undef REGISTER_OP
 }

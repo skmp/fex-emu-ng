@@ -101,6 +101,22 @@ bool ConstProp::Run(IREmitter *IREmit) {
       break;
       }
 */
+      case OP_LOADMEMTSO:
+      case OP_LOADMEM: {
+        auto Op = IROp->CW<IR::IROp_LoadMem>();
+        if (Op->Header.Args[0].GetNode(ListBegin)->Op(DataBegin)->Op == OP_ADD) {
+
+          auto Adder = Op->Header.Args[0].GetNode(ListBegin)->Op(DataBegin)->CW<IR::IROp_Add>();
+
+          // A BFE that extracts all bits results in original value
+          IREmit->SetWriteCursor(CodeNode);
+          auto faster = IREmit->_LoadMem2(Adder->Header.Args[0].GetNode(ListBegin), Adder->Header.Args[1].GetNode(ListBegin), Op->Size, Op->Align, Op->Class);
+          IREmit->ReplaceAllUsesWithInclusive(CodeNode, faster, CodeBegin, CodeLast);
+          Changed = true;
+          //printf("Matched LOADMEM!\n");
+        }
+        break;
+      }
       case OP_ADD: {
         auto Op = IROp->C<IR::IROp_Add>();
         uint64_t Constant1;

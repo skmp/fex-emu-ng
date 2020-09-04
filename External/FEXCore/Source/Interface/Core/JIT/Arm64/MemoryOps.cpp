@@ -417,6 +417,56 @@ DEF_OP(LoadMem) {
   }
 }
 
+DEF_OP(LoadMem2) {
+  auto Op = IROp->C<IR::IROp_LoadMem2>();
+
+  auto MemSrc = MemOperand(GetReg<RA_64>(Op->Header.Args[0].ID()), GetReg<RA_64>(Op->Header.Args[1].ID()));
+  if (!CTX->Config.UnifiedMemory) {
+    LoadConstant(TMP1, (uint64_t)CTX->MemoryMapper.GetMemoryBase());
+    MemSrc = MemOperand(TMP1, GetReg<RA_64>(Op->Header.Args[0].ID()));
+  }
+
+  if (Op->Class == FEXCore::IR::GPRClass) {
+    auto Dst = GetReg<RA_64>(Node);
+    switch (Op->Size) {
+      case 1:
+        ldrb(Dst, MemSrc);
+        break;
+      case 2:
+        ldrh(Dst, MemSrc);
+        break;
+      case 4:
+        ldr(Dst.W(), MemSrc);
+        break;
+      case 8:
+        ldr(Dst, MemSrc);
+        break;
+      default:  LogMan::Msg::A("Unhandled LoadMem size: %d", Op->Size);
+    }
+  }
+  else {
+    auto Dst = GetDst(Node);
+    switch (Op->Size) {
+      case 1:
+        ldr(Dst.B(), MemSrc);
+        break;
+      case 2:
+        ldr(Dst.H(), MemSrc);
+        break;
+      case 4:
+        ldr(Dst.S(), MemSrc);
+        break;
+      case 8:
+        ldr(Dst.D(), MemSrc);
+        break;
+      case 16:
+        ldr(Dst, MemSrc);
+        break;
+      default:  LogMan::Msg::A("Unhandled LoadMem size: %d", Op->Size);
+    }
+  }
+}
+
 DEF_OP(LoadMemTSO) {
   auto Op = IROp->C<IR::IROp_LoadMemTSO>();
 
@@ -600,6 +650,7 @@ void JITCore::RegisterMemoryHandlers() {
   REGISTER_OP(LOADFLAG,            LoadFlag);
   REGISTER_OP(STOREFLAG,           StoreFlag);
   REGISTER_OP(LOADMEM,             LoadMem);
+  REGISTER_OP(LOADMEM2,            LoadMem2);
   REGISTER_OP(STOREMEM,            StoreMem);
   REGISTER_OP(LOADMEMTSO,          LoadMem);
   REGISTER_OP(STOREMEMTSO,         StoreMem);

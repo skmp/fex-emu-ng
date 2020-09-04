@@ -333,6 +333,7 @@ private:
   DEF_OP(LoadFlag);
   DEF_OP(StoreFlag);
   DEF_OP(LoadMem);
+  DEF_OP(LoadMem2);
   DEF_OP(StoreMem);
   DEF_OP(LoadMemTSO);
   DEF_OP(StoreMemTSO);

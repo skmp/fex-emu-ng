@@ -227,6 +227,11 @@ namespace {
         return Op->Class;
         break;
       }
+      case IR::OP_LOADMEM2:{
+        auto Op = IROp->C<IR::IROp_LoadMem2>();
+        return Op->Class;
+        break;
+      }
       case IR::OP_LOADMEM:
       case IR::OP_LOADMEMTSO: {
         auto Op = IROp->C<IR::IROp_LoadMem>();

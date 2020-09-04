@@ -532,6 +532,23 @@
       ]
     },
 
+    "LoadMem2": {
+      "OpClass": "Memory",
+      "HasDest": true,
+      "DestClass": "Complex",
+      "DestSize": "Size",
+      "SSAArgs": "2",
+      "SSANames": [
+        "Addr",
+        "Offs"
+      ],
+      "Args": [
+        "uint8_t", "Size",
+        "uint8_t", "Align",
+        "RegisterClassType", "Class"
+      ]
+    },
+
     "StoreMem": {
       "Desc": [ "Stores a value to memory.",
                 "Zero Extends if value's type is too small",

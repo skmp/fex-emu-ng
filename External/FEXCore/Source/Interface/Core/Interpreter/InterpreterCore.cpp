@@ -178,6 +178,8 @@ void InterpreterCore::ExecuteCode(FEXCore::Core::InternalThreadState *Thread) {
         }
 
         switch (IROp->Op) {
+          case IR::OP_INVALIDATEFLAGS:
+          case IR::OP_GUESTOP:
           case IR::OP_DUMMY:
           case IR::OP_BEGINBLOCK:
             break;
@@ -587,6 +589,19 @@ void InterpreterCore::ExecuteCode(FEXCore::Core::InternalThreadState *Thread) {
               LogMan::Throw::A(Data != nullptr, "Couldn't Map pointer to 0x%lx\n", *GetSrc<uint64_t*>(Op->Header.Args[0]));
             }
             memcpy(GDP, Data, OpSize);
+            break;
+          }
+          case IR::OP_LOADMEM2:{
+            auto Op = IROp->C<IR::IROp_LoadMem>();
+            uintptr_t Data{};
+            //if (Thread->CTX->Config.UnifiedMemory) {
+              Data = *GetSrc<uintptr_t*>(Op->Header.Args[0]) + *GetSrc<uintptr_t*>(Op->Header.Args[1]);
+            //}
+            //else {
+              //Data = Thread->CTX->MemoryMapper.GetPointer<void const*>(*GetSrc<uint64_t*>(Op->Header.Args[0]));
+              //LogMan::Throw::A(Data != nullptr, "Couldn't Map pointer to 0x%lx\n", *GetSrc<uint64_t*>(Op->Header.Args[0]));
+            //}
+            memcpy(GDP, (void*)Data, OpSize);
             break;
           }
           case IR::OP_VLOADMEMELEMENT: {
