@@ -4180,7 +4180,7 @@ void OpDispatchBuilder::GenerateFlags_ADC(FEXCore::X86Tables::DecodedOp Op, Orde
     auto PopCountOp = _Popcount(_And(Res, _Constant(0xFF)));
 
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+   // SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // ZF
@@ -4252,7 +4252,7 @@ void OpDispatchBuilder::GenerateFlags_SBB(FEXCore::X86Tables::DecodedOp Op, Orde
     auto PopCountOp = _Popcount(_And(Res, _Constant(0xFF)));
 
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+    //SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // ZF
@@ -4321,7 +4321,7 @@ void OpDispatchBuilder::GenerateFlags_SUB(FEXCore::X86Tables::DecodedOp Op, Orde
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+    //SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // ZF
@@ -4377,7 +4377,7 @@ void OpDispatchBuilder::GenerateFlags_ADD(FEXCore::X86Tables::DecodedOp Op, Orde
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+    //SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // ZF
@@ -4492,7 +4492,7 @@ void OpDispatchBuilder::GenerateFlags_Logical(FEXCore::X86Tables::DecodedOp Op, 
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+    //SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // ZF
@@ -4532,7 +4532,7 @@ void OpDispatchBuilder::GenerateFlags_ShiftLeft(FEXCore::X86Tables::DecodedOp Op
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+   // SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // AF
@@ -4592,7 +4592,7 @@ void OpDispatchBuilder::GenerateFlags_ShiftRight(FEXCore::X86Tables::DecodedOp O
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+   // SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // AF
@@ -4653,7 +4653,7 @@ void OpDispatchBuilder::GenerateFlags_SignShiftRight(FEXCore::X86Tables::Decoded
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+   // SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // AF
@@ -4705,7 +4705,7 @@ void OpDispatchBuilder::GenerateFlags_ShiftLeftImmediate(FEXCore::X86Tables::Dec
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+   // SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // AF
@@ -4752,7 +4752,7 @@ void OpDispatchBuilder::GenerateFlags_SignShiftRightImmediate(FEXCore::X86Tables
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+   // SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // AF
@@ -4801,7 +4801,7 @@ void OpDispatchBuilder::GenerateFlags_ShiftRightImmediate(FEXCore::X86Tables::De
     auto EightBitMask = _Constant(0xFF);
     auto PopCountOp = _Popcount(_And(Res, EightBitMask));
     auto XorOp = _Xor(PopCountOp, _Constant(1));
-    SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
+   // SetRFLAG<FEXCore::X86State::RFLAG_PF_LOC>(XorOp);
   }
 
   // AF
