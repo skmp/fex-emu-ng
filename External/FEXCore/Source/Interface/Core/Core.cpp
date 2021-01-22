@@ -35,6 +35,8 @@ namespace FEXCore::CPU {
   }
 }
 
+static std::mutex AOTCacheLock;
+
 namespace FEXCore::Core {
 struct ThreadLocalData {
   FEXCore::Core::InternalThreadState* Thread;
@@ -111,7 +113,7 @@ namespace DefaultFallbackCore {
     void Initialize() override {}
     bool NeedsOpDispatch() override { return false; }
 
-    void *CompileCode(FEXCore::IR::IRListView<true> const *IR, FEXCore::Core::DebugData *DebugData) override {
+    void *CompileCode(FEXCore::IR::IRListView const *IR, FEXCore::Core::DebugData *DebugData, FEXCore::IR::RegisterAllocationData *RAData) override {
       LogMan::Msg::E("Fell back to default code handler at RIP: 0x%lx", ThreadState->State.State.rip);
       return nullptr;
     }
@@ -604,10 +606,22 @@ namespace FEXCore::Context {
 
     // Do we already have this in the IR cache?
     auto IR = Thread->IRLists.find(GuestRIP);
-    FEXCore::IR::IRListView<true> *IRList {};
+    FEXCore::IR::IRListView *IRList {};
     FEXCore::Core::DebugData *DebugData {};
+    FEXCore::IR::RegisterAllocationData *RAData {};
 
-    if (IR == Thread->IRLists.end()) {
+    if (IR != Thread->IRLists.end())
+      IRList = IR->second.get();
+    else {
+      std::lock_guard<std::mutex> lk(AOTCacheLock);
+      auto AOTEntry = AOTCache.find(GuestRIP);
+      if (AOTEntry != AOTCache.end()) {
+        IRList = AOTEntry->second.IR;
+        RAData = &AOTEntry->second.RAData;
+      }
+    }
+
+    if (IRList == nullptr) {
       bool HadDispatchError {false};
 
       uint64_t TotalInstructions {0};
@@ -724,7 +738,7 @@ namespace FEXCore::Context {
 
 
 
-      auto IRDumper = [Thread, GuestRIP](IR::RegisterAllocationPass* RA) {
+      auto IRDumper = [Thread, GuestRIP](IR::RegisterAllocationData* RA) {
         FILE* f = nullptr;
         bool CloseAfter = false;
 
@@ -762,18 +776,33 @@ namespace FEXCore::Context {
       Thread->PassManager->Run(Thread->OpDispatcher.get());
 
       if (Thread->CTX->Config.DumpIR != "no") {
-        IRDumper(Thread->PassManager->GetRAPass());
+        IRDumper(Thread->PassManager->GetRAPass()->GetAllocationData());
       }
 
       if (Thread->OpDispatcher->ShouldDump) {
         std::stringstream out;
         auto NewIR = Thread->OpDispatcher->ViewIR();
-        FEXCore::IR::Dump(&out, &NewIR, Thread->PassManager->GetRAPass());
+        FEXCore::IR::Dump(&out, &NewIR, Thread->PassManager->GetRAPass()->GetAllocationData());
         printf("IR 0x%lx:\n%s\n@@@@@\n", GuestRIP, out.str().c_str());
       }
 
+      RAData = Thread->PassManager->GetRAPass()->GetAllocationData();
+
       // Create a copy of the IR and place it in this thread's IR cache
       auto AddedIR = Thread->IRLists.try_emplace(GuestRIP, Thread->OpDispatcher->CreateIRCopy());
+      {
+        std::lock_guard<std::mutex> lk(AOTCacheLock);
+        AOTCache.insert({
+          GuestRIP, { 
+            Thread->FrontendDecoder->DecodedMinAddress,
+            Thread->FrontendDecoder->DecodedMaxAddress - Thread->FrontendDecoder->DecodedMinAddress,
+            0,
+            Thread->OpDispatcher->CreateIRCopy(),
+            *RAData
+          }
+        });
+      }
+
       Thread->OpDispatcher->ResetWorkingList();
 
       auto Debugit = &Thread->DebugData.try_emplace(GuestRIP).first->second;
@@ -783,9 +812,9 @@ namespace FEXCore::Context {
       IRList = AddedIR.first->second.get();
       DebugData = Debugit;
       Thread->Stats.BlocksCompiled.fetch_add(1);
+
     }
     else {
-      IRList = IR->second.get();
       auto Debugit = Thread->DebugData.find(GuestRIP);
       if (Debugit != Thread->DebugData.end()) {
         DebugData = &Debugit->second;
@@ -793,7 +822,99 @@ namespace FEXCore::Context {
     }
 
     // Attempt to get the CPU backend to compile this code
-    return { Thread->CPUBackend->CompileCode(IRList, DebugData), DebugData };
+    return { Thread->CPUBackend->CompileCode(IRList, DebugData, RAData), DebugData };
+  }
+
+  bool Context::LoadAOTCache(std::istream &stream) {
+    std::lock_guard<std::mutex> lk(AOTCacheLock);
+
+    AOTCache.clear();
+
+    uint64_t tag;
+    stream.read((char*)&tag, sizeof(tag));
+
+    if (!stream || tag != 0xDEADBEEFC0D30000)
+      return false;
+
+    do {
+      uint64_t addr, start, crc, len;
+      stream.read((char*)&addr, sizeof(addr));
+
+      if (!stream)
+        return false;
+      
+      stream.read((char*)&start, sizeof(start));
+
+      if (!stream)
+        return false;
+
+      stream.read((char*)&len, sizeof(len));
+
+      if (!stream)
+        return false;
+
+      stream.read((char*)&crc, sizeof(crc));
+
+      if (!stream)
+        return false;
+
+      auto IR = new IR::IRListView(stream);
+
+      if (!stream) {
+        delete IR;
+        return false;
+      }
+
+      IR::RegisterAllocationData RAData;
+      uint64_t RASize;
+      stream.read((char*)&RASize, sizeof(RASize));
+
+      if (!stream) {
+        delete IR;
+        return false;
+      }
+
+      RAData.RegAndClass.resize(RASize);
+
+      stream.read((char*)&RAData.RegAndClass[0], sizeof(RAData.RegAndClass[0]) * RASize);
+      
+      if (!stream) {
+        delete IR;
+        return false;
+      }
+
+      stream.read((char*)&RAData.SpillSlotCount, sizeof(RAData.SpillSlotCount));
+
+      if (!stream) {
+        delete IR;
+        return false;
+      }
+
+      AOTCache.insert({addr, {start, len, crc, IR, RAData}});
+    } while(stream);
+
+    return true;
+  }
+
+  void Context::WriteAOTCache(std::ostream &stream) {
+    std::lock_guard<std::mutex> lk(AOTCacheLock);
+
+    uint64_t tag = 0xDEADBEEFC0D30000;
+    stream.write((char*)&tag, sizeof(tag));
+
+    for (auto entry: AOTCache) {
+      stream.write((char*)&entry.first, sizeof(entry.first));
+
+      stream.write((char*)&entry.second.start, sizeof(entry.second.start));
+      stream.write((char*)&entry.second.len, sizeof(entry.second.len));
+      stream.write((char*)&entry.second.crc, sizeof(entry.second.crc));
+      entry.second.IR->Serialize(stream);
+
+      uint64_t RASize = entry.second.RAData.RegAndClass.size();
+      stream.write((char*)&RASize, sizeof(RASize));
+      stream.write((char*)&entry.second.RAData.RegAndClass[0], sizeof(entry.second.RAData.RegAndClass[0]) * RASize);
+      stream.write((char*)&entry.second.RAData.SpillSlotCount, sizeof(entry.second.RAData.SpillSlotCount));
+    }
   }
 
   uintptr_t Context::CompileBlock(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
@@ -850,7 +971,7 @@ namespace FEXCore::Context {
     // We have ONE more chance to try and fallback to the fallback CPU backend
     // This will most likely fail since regular code use won't be using a fallback core.
     // It's mainly for testing new instruction encodings
-    void *CodePtr = Thread->FallbackBackend->CompileCode(nullptr, nullptr);
+    void *CodePtr = Thread->FallbackBackend->CompileCode(nullptr, nullptr, nullptr);
     if (CodePtr) {
      uintptr_t Ptr = reinterpret_cast<uintptr_t >(AddBlockMapping(Thread, GuestRIP, CodePtr));
      return Ptr;

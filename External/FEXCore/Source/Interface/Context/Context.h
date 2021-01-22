@@ -6,6 +6,7 @@
 #include "Interface/Core/InternalThreadState.h"
 #include "Interface/Core/X86HelperGen.h"
 #include "Interface/IR/PassManager.h"
+#include "Interface/IR/Passes/RegisterAllocationPass.h"
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Core/CPUBackend.h>
 #include <FEXCore/Utils/Event.h>
@@ -13,6 +14,8 @@
 
 #include <memory>
 #include <mutex>
+#include <istream>
+#include <ostream>
 
 namespace FEXCore {
 class ThunkHandler;
@@ -30,6 +33,8 @@ class SyscallHandler;
 
 namespace FEXCore::IR {
   class RegisterAllocationPass;
+  class RegisterAllocationData;
+  class IRListView;
 namespace Validation {
   class IRValidation;
 }
@@ -90,6 +95,14 @@ namespace FEXCore::Context {
     CustomCPUFactoryType FallbackCPUFactory;
     std::function<void(uint64_t ThreadId, FEXCore::Context::ExitReason)> CustomExitHandler;
 
+    struct AOTCacheEntry {
+      uint64_t start;
+      uint64_t len;
+      uint64_t crc;
+      IR::IRListView* IR;
+      IR::RegisterAllocationData RAData;
+    };
+    std::map<uint64_t, AOTCacheEntry> AOTCache;
 #ifdef BLOCKSTATS
     std::unique_ptr<FEXCore::BlockSamplingData> BlockData;
 #endif
@@ -140,6 +153,8 @@ namespace FEXCore::Context {
     uintptr_t CompileBlock(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP);
     uintptr_t CompileFallbackBlock(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP);
 
+    bool LoadAOTCache(std::istream &stream);
+    void WriteAOTCache(std::ostream &stream);
     // Used for thread creation from syscalls
     void InitializeCompiler(FEXCore::Core::InternalThreadState* State, bool CompileThread);
     FEXCore::Core::InternalThreadState* CreateThread(FEXCore::Core::CPUState *NewThreadState, uint64_t ParentTID);

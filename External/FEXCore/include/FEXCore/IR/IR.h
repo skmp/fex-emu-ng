@@ -7,6 +7,7 @@
 
 namespace FEXCore::IR {
 class RegisterAllocationPass;
+class RegisterAllocationData;
 
 /**
  * @brief The IROp_Header is an dynamically sized array
@@ -455,10 +456,9 @@ public:
   }
 };
 
-template<bool>
 class IRListView;
 
-void Dump(std::stringstream *out, IRListView<false> const* IR, IR::RegisterAllocationPass *RAPass);
+void Dump(std::stringstream *out, IRListView const* IR, IR::RegisterAllocationData *RAPass);
 
 template<typename Type>
 inline uint32_t NodeWrapperBase<Type>::ID() const { return NodeOffset / sizeof(IR::OrderedNode); }

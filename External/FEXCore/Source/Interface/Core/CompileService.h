@@ -28,7 +28,7 @@ class CompileService final {
 
       // Outgoing
       void *CodePtr{};
-      FEXCore::IR::IRListView<true> *IRList{};
+      FEXCore::IR::IRListView *IRList{};
       FEXCore::Core::DebugData *DebugData{};
 
       // Communication

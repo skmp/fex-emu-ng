@@ -77,7 +77,7 @@ namespace FEXCore::Core {
 
     std::unique_ptr<FEXCore::BlockCache> BlockCache;
 
-    std::unordered_map<uint64_t, std::unique_ptr<FEXCore::IR::IRListView<true>>> IRLists;
+    std::unordered_map<uint64_t, std::unique_ptr<FEXCore::IR::IRListView>> IRLists;
     std::unordered_map<uint64_t, FEXCore::Core::DebugData> DebugData;
 
     std::unique_ptr<FEXCore::Frontend::Decoder> FrontendDecoder;
