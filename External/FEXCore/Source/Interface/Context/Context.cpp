@@ -151,8 +151,8 @@ namespace FEXCore::Context {
     return CTX->CPUID.RunFunction(Function);
   }
 
-  bool ReadAOT(FEXCore::Context::Context *CTX, std::istream& stream) {
-    return CTX->LoadAOTCache(stream);
+  bool ReadAOT(FEXCore::Context::Context *CTX, const std::string& file) {
+    return CTX->LoadAOTCache(file);
   }
   void WriteAOT(FEXCore::Context::Context *CTX, std::ostream& stream) {
     CTX->WriteAOTCache(stream);

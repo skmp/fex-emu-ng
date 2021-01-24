@@ -2,6 +2,7 @@
 
 #include "FEXCore/IR/IR.h"
 #include <FEXCore/Utils/LogManager.h>
+#include <Common/MathUtils.h>
 
 #include <cassert>
 #include <cstddef>
@@ -70,49 +71,48 @@ public:
   IRListView(IRListView &&) = delete;
 
   IRListView(IntrusiveAllocator *Data, IntrusiveAllocator *List, bool _IsCopy) : IsCopy(_IsCopy) {
-    DataSize = Data->Size();
-    ListSize = List->Size();
+    DataSize = AlignUp(Data->Size(), 8);
+    ListSize = AlignUp(List->Size(), 8);
 
     if (IsCopy) {
-      IRData = malloc(DataSize + ListSize);
-      ListData = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(IRData) + DataSize);
-      memcpy(IRData, reinterpret_cast<void*>(Data->Begin()), DataSize);
-      memcpy(ListData, reinterpret_cast<void*>(List->Begin()), ListSize);
+      IRDataPtr = malloc(DataSize + ListSize);
+      ListDataPtr = reinterpret_cast<void*>(GetData() + DataSize);
+      memcpy(IRDataPtr, reinterpret_cast<void*>(Data->Begin()), DataSize);
+      memcpy(ListDataPtr, reinterpret_cast<void*>(List->Begin()), ListSize);
     }
     else {
       // We are just pointing to the data
-      IRData = reinterpret_cast<void*>(Data->Begin());
-      ListData = reinterpret_cast<void*>(List->Begin());
+      IRDataPtr = reinterpret_cast<void*>(Data->Begin());
+      ListDataPtr = reinterpret_cast<void*>(List->Begin());
     }
   }
 
   IRListView(IRListView *Old, bool _IsCopy) : IsCopy(_IsCopy) {
-    DataSize = Old->DataSize;
-    ListSize = Old->ListSize;
+    DataSize = AlignUp(Old->DataSize, 8);
+    ListSize = AlignUp(Old->ListSize, 8);
     if (IsCopy) {
-      IRData = malloc(DataSize + ListSize);
-      ListData = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(IRData) + DataSize);
-      memcpy(IRData, Old->IRData, DataSize);
-      memcpy(ListData, Old->ListData, ListSize);
+      IRDataPtr = malloc(DataSize + ListSize);
+      ListDataPtr = reinterpret_cast<void*>(GetData() + DataSize);
+      memcpy(IRDataPtr, (void*)Old->GetData(), DataSize);
+      memcpy(ListDataPtr, (void*)Old->GetListData(), ListSize);
     } else {
-      IRData = Old->IRData;
-      ListData = Old->ListData;
+      IRDataPtr = (void*)Old->GetData();
+      ListDataPtr = (void*)Old->GetListData();
     }
   }
 
-  IRListView(std::istream& stream) : IsCopy(true) {
-    stream.read((char*)&DataSize, sizeof(DataSize));
-    stream.read((char*)&ListSize, sizeof(ListSize));
-    
-    IRData = malloc(DataSize + ListSize);
-    ListData = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(IRData) + DataSize);
-    stream.read((char*)IRData, DataSize);
-    stream.read((char*)ListData, ListSize);
+  IRListView(bool IsInline) {
+    LogMan::Throw::A(IsInline == true, "This ctor supports only inline structures");
+    // don't touch mem
+    LogMan::Throw::A(IRDataPtr == nullptr, "Inline must not have IRData");
+    LogMan::Throw::A(ListDataPtr == nullptr, "Inline must not have ListData");
+    LogMan::Throw::A(DataSize != 0, "Inline must have DataSize");
+    LogMan::Throw::A(ListSize != 0, "Inline must have DataSize");
   }
 
   ~IRListView() {
     if (IsCopy) {
-      free (IRData);
+      free (IRDataPtr);
       // ListData is just offset from IRData
     }
   }
@@ -120,16 +120,16 @@ public:
   void Serialize(std::ostream& stream) {
     stream.write((char*)&DataSize, sizeof(DataSize));
     stream.write((char*)&ListSize, sizeof(ListSize));
-    stream.write((char*)IRData, DataSize);
-    stream.write((char*)ListData, ListSize);
+    stream.write((char*)GetData(), DataSize);
+    stream.write((char*)GetListData(), ListSize);
   }
 
   IRListView *CreateCopy() {
     return new IRListView(this, true);
   }
 
-  uintptr_t const GetData() const { return reinterpret_cast<uintptr_t>(IRData); }
-  uintptr_t const GetListData() const { return reinterpret_cast<uintptr_t>(ListData); }
+  uintptr_t const GetData() const { return IRDataPtr ? reinterpret_cast<uintptr_t>(IRDataPtr) : (uintptr_t(this) + sizeof(*this)); }
+  uintptr_t const GetListData() const { return ListDataPtr ? reinterpret_cast<uintptr_t>(ListDataPtr) : (uintptr_t(this) + sizeof(*this) + DataSize); }
 
   size_t GetDataSize() const { return DataSize; }
   size_t GetListSize() const { return ListSize; }
@@ -243,7 +243,7 @@ public:
   {
     OrderedNodeWrapper Wrapped;
     Wrapped.NodeOffset = sizeof(OrderedNode);
-    return iterator(reinterpret_cast<uintptr_t>(ListData), reinterpret_cast<uintptr_t>(IRData), Wrapped);
+    return iterator(GetListData(), GetData(), Wrapped);
   }
 
   /**
@@ -255,7 +255,7 @@ public:
   {
     OrderedNodeWrapper Wrapped;
     Wrapped.NodeOffset = 0;
-    return iterator(reinterpret_cast<uintptr_t>(ListData), reinterpret_cast<uintptr_t>(IRData), Wrapped);
+    return iterator(GetListData(), GetData(), Wrapped);
   }
 
   /**
@@ -263,26 +263,26 @@ public:
    * @return Iterator for this op
    */
   iterator at(OrderedNodeWrapper Wrapped) const noexcept {
-    return iterator(reinterpret_cast<uintptr_t>(ListData), reinterpret_cast<uintptr_t>(IRData), Wrapped);
+    return iterator(GetListData(), GetData(), Wrapped);
   }
 
   iterator at(uint32_t ID) const noexcept {
     OrderedNodeWrapper Wrapped;
     Wrapped.NodeOffset = ID * sizeof(OrderedNode);
-    return iterator(reinterpret_cast<uintptr_t>(ListData), reinterpret_cast<uintptr_t>(IRData), Wrapped);
+    return iterator(GetListData(), GetData(), Wrapped);
   }
 
   iterator at(OrderedNode *Node) const noexcept {
-    auto Wrapped = Node->Wrapped(reinterpret_cast<uintptr_t>(ListData));
-    return iterator(reinterpret_cast<uintptr_t>(ListData), reinterpret_cast<uintptr_t>(IRData), Wrapped);
+    auto Wrapped = Node->Wrapped(GetListData());
+    return iterator(GetListData(), GetData(), Wrapped);
   }
 
 private:
-  void *IRData;
-  void *ListData;
+  void *IRDataPtr;
+  void *ListDataPtr;
   size_t DataSize;
   size_t ListSize;
-  bool IsCopy;
+  uint64_t IsCopy; // uint64_t for alignment
 };
 }
 

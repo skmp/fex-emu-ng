@@ -261,6 +261,7 @@ int main(int argc, char **argv, char **const envp) {
   FEXCore::Config::SetConfig(CTX, FEXCore::Config::CONFIG_ABI_LOCAL_FLAGS, ABILocalFlags());
   FEXCore::Config::SetConfig(CTX, FEXCore::Config::CONFIG_ABI_NO_PF, AbiNoPF());
   FEXCore::Config::SetConfig(CTX, FEXCore::Config::CONFIG_DUMPIR, DumpIR());
+  FEXCore::Config::SetConfig(CTX, FEXCore::Config::CONFIG_IR_CACHE, (uint64_t)FEXCore::Config::CONFIG_LOAD);
   FEXCore::Config::Set(FEXCore::Config::CONFIG_APP_FILENAME, std::filesystem::canonical(Program));
   FEXCore::Config::Set(FEXCore::Config::CONFIG_IS64BIT_MODE, Loader.Is64BitMode() ? "1" : "0");
 
@@ -291,18 +292,14 @@ int main(int argc, char **argv, char **const envp) {
   std::string base_filename = Program.substr(Program.find_last_of("/\\") + 1) + ".fex-emu.aot";
 
   {
-    std::ifstream AOTRead(base_filename, std::ios::in | std::ios::binary);
-
-    if (AOTRead) {
-      if (FEXCore::Context::ReadAOT(CTX, AOTRead)) {
-        LogMan::Msg::I("AOT Cache Loaded\n");
-      }
+    if (FEXCore::Context::ReadAOT(CTX, base_filename)) {
+      LogMan::Msg::I("AOT Cache Loaded\n");
     }
   }
 
   FEXCore::Context::RunUntilExit(CTX);
 
-  {
+  if (FEXCore::Config::GetConfig(CTX,  FEXCore::Config::CONFIG_IR_CACHE) == FEXCore::Config::CONFIG_GENERATE) {
     std::ofstream AOTWrite(base_filename, std::ios::out | std::ios::binary );
 
     if (AOTWrite) {

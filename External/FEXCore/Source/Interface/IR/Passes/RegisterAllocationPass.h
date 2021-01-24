@@ -7,13 +7,22 @@ class IRListView;
 
 class RegisterAllocationData {
   public:
-    std::vector<uint64_t> RegAndClass;
-    uint32_t SpillSlotCount {};
+    std::unique_ptr<uint64_t[]> RegAndClass;
+    uint64_t SpillSlotCount {};
+    uint64_t Nodes;
+
     uint64_t GetNodeRegister(uint32_t Node) {
-      return RegAndClass[Node];
+      LogMan::Throw::A(Node < Nodes, "Out of range access in RegisterAllocationData");
+      if (RegAndClass != nullptr) {
+        return RegAndClass[Node];
+      } else {
+        return ((uint64_t*)(uintptr_t(this) + sizeof(RegisterAllocationData)))[Node];
+      }
     }
-    uint32_t SpillSlots() const { return SpillSlotCount; }
+    uint32_t SpillSlots() const { return (uint32_t)SpillSlotCount; }
 };
+
+static_assert(sizeof(RegisterAllocationData) == 24);
 
 class RegisterAllocationPass : public FEXCore::IR::Pass {
   public:

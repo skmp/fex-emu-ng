@@ -233,6 +233,6 @@ namespace FEXCore::Context {
   void SetSyscallHandler(FEXCore::Context::Context *CTX, FEXCore::HLE::SyscallHandler *Handler);
   FEXCore::CPUID::FunctionResults RunCPUIDFunction(FEXCore::Context::Context *CTX, uint32_t Function, uint32_t Leaf);
 
-  bool ReadAOT(FEXCore::Context::Context *CTX, std::istream& stream);
+  bool ReadAOT(FEXCore::Context::Context *CTX, const std::string& file);
   void WriteAOT(FEXCore::Context::Context *CTX, std::ostream& stream);
 }

@@ -31,12 +31,19 @@ namespace FEXCore::Config {
     CONFIG_INTERPRETER_INSTALLED,
     CONFIG_APP_FILENAME,
     CONFIG_DEBUG_DISABLE_OPTIMIZATION_PASSES,
+    CONFIG_IR_CACHE,
   };
 
   enum ConfigCore {
     CONFIG_INTERPRETER,
     CONFIG_IRJIT,
     CONFIG_CUSTOM,
+  };
+
+  enum ConfigIRCache {
+    CONFIG_DISABLED,
+    CONFIG_GENERATE,
+    CONFIG_LOAD
   };
 
   void SetConfig(FEXCore::Context::Context *CTX, ConfigOption Option, uint64_t Config);

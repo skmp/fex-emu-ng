@@ -69,6 +69,7 @@ namespace FEXCore::Context {
       bool ABINoPF {false};
 
       std::string DumpIR;
+      Config::ConfigIRCache IRCache;
 
     } Config;
 
@@ -99,8 +100,9 @@ namespace FEXCore::Context {
       uint64_t start;
       uint64_t len;
       uint64_t crc;
+      uint64_t size;
       IR::IRListView* IR;
-      IR::RegisterAllocationData RAData;
+      IR::RegisterAllocationData* RAData;
     };
     std::map<uint64_t, AOTCacheEntry> AOTCache;
 #ifdef BLOCKSTATS
@@ -153,7 +155,7 @@ namespace FEXCore::Context {
     uintptr_t CompileBlock(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP);
     uintptr_t CompileFallbackBlock(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP);
 
-    bool LoadAOTCache(std::istream &stream);
+    bool LoadAOTCache(const std::string &file);
     void WriteAOTCache(std::ostream &stream);
     // Used for thread creation from syscalls
     void InitializeCompiler(FEXCore::Core::InternalThreadState* State, bool CompileThread);

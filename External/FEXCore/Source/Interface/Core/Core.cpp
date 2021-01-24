@@ -24,6 +24,8 @@
 
 #include <fstream>
 #include <unistd.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 
 #include "Interface/Core/GdbServer.h"
 
@@ -612,12 +614,12 @@ namespace FEXCore::Context {
 
     if (IR != Thread->IRLists.end())
       IRList = IR->second.get();
-    else {
+    else if (Config.IRCache == Config::CONFIG_LOAD) {
       std::lock_guard<std::mutex> lk(AOTCacheLock);
       auto AOTEntry = AOTCache.find(GuestRIP);
       if (AOTEntry != AOTCache.end()) {
         IRList = AOTEntry->second.IR;
-        RAData = &AOTEntry->second.RAData;
+        RAData = AOTEntry->second.RAData;
       }
     }
 
@@ -790,15 +792,28 @@ namespace FEXCore::Context {
 
       // Create a copy of the IR and place it in this thread's IR cache
       auto AddedIR = Thread->IRLists.try_emplace(GuestRIP, Thread->OpDispatcher->CreateIRCopy());
-      {
+
+      // insert in the AOT cache
+      if (Config.IRCache == Config::CONFIG_GENERATE) {
+        auto NewRA = new IR::RegisterAllocationData();
+        NewRA->Nodes = RAData->Nodes;
+        NewRA->RegAndClass.reset(new uint64_t[RAData->Nodes]);
+        memcpy(&NewRA->RegAndClass[0], &RAData->RegAndClass[0], RAData->Nodes * sizeof(RAData->RegAndClass[0]));
+        NewRA->SpillSlotCount = RAData->SpillSlotCount;
+
+        auto NewIR = Thread->OpDispatcher->CreateIRCopy();
+        //assert(memcmp((void*)NewIR->GetData(), (void*)Thread->OpDispatcher->ViewIR().GetData(), NewIR->GetDataSize()) == 0);
+        //assert(memcmp((void*)NewIR->GetListData(), (void*)Thread->OpDispatcher->ViewIR().GetListData(), NewIR->GetListSize()) == 0);
+
         std::lock_guard<std::mutex> lk(AOTCacheLock);
         AOTCache.insert({
           GuestRIP, { 
             Thread->FrontendDecoder->DecodedMinAddress,
             Thread->FrontendDecoder->DecodedMaxAddress - Thread->FrontendDecoder->DecodedMinAddress,
             0,
-            Thread->OpDispatcher->CreateIRCopy(),
-            *RAData
+            0,
+            NewIR,
+            NewRA
           }
         });
       }
@@ -825,96 +840,159 @@ namespace FEXCore::Context {
     return { Thread->CPUBackend->CompileCode(IRList, DebugData, RAData), DebugData };
   }
 
-  bool Context::LoadAOTCache(std::istream &stream) {
+  struct __attribute__((packed)) AOTCacheFile {
+    uint64_t tag;
+    uint64_t size;
+    uint64_t count;
+    struct Entry {
+      uint64_t entry;
+      uint64_t start;
+      uint64_t crc;
+      uint64_t len;
+      uint64_t size;
+    } entries[0];
+  };
+
+  bool Context::LoadAOTCache(const std::string &file) {
     std::lock_guard<std::mutex> lk(AOTCacheLock);
+    if (Config.IRCache != Config::CONFIG_LOAD) {
+      return false;
+    }
+
+    int fd = open(file.c_str(), O_RDONLY);
+
+    if (fd == -1) {
+      return false;
+    }
+    uint64_t size, tag;
+    if (read(fd, &tag, sizeof(tag)) != sizeof(tag) || tag != 0xDEADBEEFC0D30001) {
+      close(fd);
+      return false;
+    }
+
+    if (read(fd, &size, sizeof(size)) != sizeof(size)) {
+      close(fd);
+      return false;
+    }
+
+    AOTCacheFile* data = (AOTCacheFile*)mmap(nullptr, size, PROT_READ, MAP_PRIVATE, fd, 0);
+
+    close(fd);
+
+    if (!data) {
+      return false;
+    }
 
     AOTCache.clear();
 
-    uint64_t tag;
-    stream.read((char*)&tag, sizeof(tag));
+    uintptr_t entry_base = uintptr_t(&data->entries[data->count]);
 
-    if (!stream || tag != 0xDEADBEEFC0D30000)
-      return false;
-
-    do {
-      uint64_t addr, start, crc, len;
-      stream.read((char*)&addr, sizeof(addr));
-
-      if (!stream)
-        return false;
+    for (uint64_t i = 0; i < data->count; i++) {
+      auto entry = &data->entries[i];
       
-      stream.read((char*)&start, sizeof(start));
+      auto local_base = entry_base;
 
-      if (!stream)
-        return false;
+      entry_base += entry->size;
 
-      stream.read((char*)&len, sizeof(len));
+      assert(*(uint64_t*)local_base == 0xFFEEFFEEFFEEFFEE);
+      local_base += 8;
 
-      if (!stream)
-        return false;
+      auto IR = (IR::IRListView*)(local_base);
+      local_base += sizeof(*IR);
+      LogMan::Throw::A((IR->GetDataSize() & 7) == 0, "IR->GetDataSize(); must be multiple of 8");
+      LogMan::Throw::A((IR->GetListSize() & 7) == 0, "IR->GetListSize(); must be multiple of 8");
+      local_base += IR->GetDataSize();
+      local_base += IR->GetListSize();
 
-      stream.read((char*)&crc, sizeof(crc));
 
-      if (!stream)
-        return false;
+      assert(*(uint64_t*)local_base == 0xFFEEFFEEFFEEFFEA);
+      local_base += 8;
 
-      auto IR = new IR::IRListView(stream);
+      auto RAData = (IR::RegisterAllocationData*)(local_base);
+      local_base += sizeof(IR::RegisterAllocationData);
+      local_base += RAData->Nodes * sizeof(uint64_t);
 
-      if (!stream) {
-        delete IR;
-        return false;
-      }
-
-      IR::RegisterAllocationData RAData;
-      uint64_t RASize;
-      stream.read((char*)&RASize, sizeof(RASize));
-
-      if (!stream) {
-        delete IR;
-        return false;
-      }
-
-      RAData.RegAndClass.resize(RASize);
-
-      stream.read((char*)&RAData.RegAndClass[0], sizeof(RAData.RegAndClass[0]) * RASize);
-      
-      if (!stream) {
-        delete IR;
-        return false;
-      }
-
-      stream.read((char*)&RAData.SpillSlotCount, sizeof(RAData.SpillSlotCount));
-
-      if (!stream) {
-        delete IR;
-        return false;
-      }
-
-      AOTCache.insert({addr, {start, len, crc, IR, RAData}});
-    } while(stream);
+      assert(local_base == entry_base);
+      AOTCache.insert({entry->entry, {entry->start, entry->len, entry->crc, entry->len, IR, RAData}});
+    };
 
     return true;
   }
 
+  /*
+  struct AOTCacheFile {
+    uint64_t tag;
+    uint64_t size;
+    uint64_t count;
+    struct Entry {
+      uint64_t addr;
+      uint64_t crc;
+      uint64_t len;
+      uint64_t size;
+    } entries[0];
+  };
+  */
+
   void Context::WriteAOTCache(std::ostream &stream) {
     std::lock_guard<std::mutex> lk(AOTCacheLock);
+    if (Config.IRCache != Config::CONFIG_GENERATE) {
+      return;
+    }
 
-    uint64_t tag = 0xDEADBEEFC0D30000;
+    uint64_t tag = 0xDEADBEEFC0D30001;
     stream.write((char*)&tag, sizeof(tag));
+    stream.write((char*)&tag, sizeof(tag)); // len
+
+    tag = AOTCache.size();
+    stream.write((char*)&tag, sizeof(tag)); // count
 
     for (auto entry: AOTCache) {
+      entry.second.size = 16 +
+        sizeof(IR::IRListView) + 
+        entry.second.IR->GetDataSize() + 
+        entry.second.IR->GetListSize() + 
+        sizeof(IR::RegisterAllocationData) + 
+        entry.second.RAData->Nodes * sizeof(uint64_t);
+
       stream.write((char*)&entry.first, sizeof(entry.first));
-
       stream.write((char*)&entry.second.start, sizeof(entry.second.start));
-      stream.write((char*)&entry.second.len, sizeof(entry.second.len));
       stream.write((char*)&entry.second.crc, sizeof(entry.second.crc));
-      entry.second.IR->Serialize(stream);
-
-      uint64_t RASize = entry.second.RAData.RegAndClass.size();
-      stream.write((char*)&RASize, sizeof(RASize));
-      stream.write((char*)&entry.second.RAData.RegAndClass[0], sizeof(entry.second.RAData.RegAndClass[0]) * RASize);
-      stream.write((char*)&entry.second.RAData.SpillSlotCount, sizeof(entry.second.RAData.SpillSlotCount));
+      stream.write((char*)&entry.second.len, sizeof(entry.second.len));
+      stream.write((char*)&entry.second.size, sizeof(entry.second.size));
     }
+
+    for (auto entry: AOTCache) {
+      uint64_t marker = 0xFFEEFFEEFFEEFFEE;
+      stream.write((char*)&marker, sizeof(marker));
+
+      uint64_t data = 0;
+      stream.write((char*)&data, sizeof(data));
+      data = 0;
+      stream.write((char*)&data, sizeof(data));
+      
+      data = entry.second.IR->GetDataSize();
+      stream.write((char*)&data, sizeof(data));
+      data = entry.second.IR->GetListSize();
+      stream.write((char*)&data, sizeof(data));
+      data = 0;
+      stream.write((char*)&data, sizeof(data));
+
+      stream.write((char*)entry.second.IR->GetData(), entry.second.IR->GetDataSize());
+      stream.write((char*)entry.second.IR->GetListData(), entry.second.IR->GetListSize());
+      
+      marker = 0xFFEEFFEEFFEEFFEA;
+      stream.write((char*)&marker, sizeof(marker));
+
+      data = 0;
+      stream.write((char*)&data, sizeof(data));
+      stream.write((char*)&entry.second.RAData->SpillSlotCount, sizeof(entry.second.RAData->SpillSlotCount));
+      stream.write((char*)&entry.second.RAData->Nodes, sizeof(entry.second.RAData->Nodes));
+      stream.write((char*)&entry.second.RAData->RegAndClass[0], entry.second.RAData->Nodes * sizeof(entry.second.RAData->RegAndClass[0]));
+    }
+
+    uint64_t len = stream.tellp();
+    stream.seekp(8);
+    stream.write((char*)&len, sizeof(len));
   }
 
   uintptr_t Context::CompileBlock(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {

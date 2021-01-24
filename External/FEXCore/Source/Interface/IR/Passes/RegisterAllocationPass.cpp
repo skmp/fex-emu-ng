@@ -468,7 +468,9 @@ namespace FEXCore::IR {
   }
 
   RegisterAllocationData* ConstrainedRAPass::GetAllocationData() {
-    Graph->RegAllocMap.RegAndClass.resize(Graph->Nodes.size());
+    Graph->RegAllocMap.Nodes = Graph->Nodes.size();
+    Graph->RegAllocMap.RegAndClass.reset(new uint64_t[Graph->Nodes.size()]);
+
     for (size_t i = 0; i < Graph->Nodes.size(); i++) {
       Graph->RegAllocMap.RegAndClass[i] = Graph->Nodes[i].Head.RegAndClass;
     }
