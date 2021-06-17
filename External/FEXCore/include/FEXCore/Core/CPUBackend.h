@@ -85,6 +85,8 @@ class LLVMCore;
     virtual void ClearCache() {}
     virtual void CopyNecessaryDataForCompileThread(CPUBackend *Original) {}
 
+    virtual void BackpatchBlockAsInvalid(uintptr_t GuestCode, uintptr_t HostCode) = 0;
+
     using AsmDispatch = __attribute__((naked)) void(*)(FEXCore::Core::CpuStateFrame *Frame);
     using JITCallback = __attribute__((naked)) void(*)(FEXCore::Core::CpuStateFrame *Frame, uint64_t RIP);
 

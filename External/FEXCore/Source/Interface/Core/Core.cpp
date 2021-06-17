@@ -135,6 +135,9 @@ namespace DefaultFallbackCore {
       return nullptr;
     }
 
+    void BackpatchBlockAsInvalid(uintptr_t GuestCode, uintptr_t HostCode) override {
+      LogMan::Msg::E("BackpatchBlockAsInvalid");
+    }
   private:
     FEXCore::Core::InternalThreadState *ThreadState;
   };
@@ -414,6 +417,7 @@ namespace FEXCore::Context {
       // Run the passmanager over the IR from the dispatcher
       Thread->PassManager->Run(IR);
       Core::LocalIREntry Entry = {Addr, 0ULL, decltype(Entry.IR)(IR->CreateIRCopy()), decltype(Entry.RAData)(Thread->PassManager->GetRAPass() ? Thread->PassManager->GetRAPass()->PullAllocationData() : nullptr), decltype(Entry.DebugData)(new Core::DebugData())};
+      std::lock_guard<std::mutex> lk(Thread->LocalIRCacheLock);
       Thread->LocalIRCache.insert({Addr, std::move(Entry)});
     };
 
@@ -574,10 +578,12 @@ namespace FEXCore::Context {
   }
 
   void Context::AddBlockMapping(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, void *Ptr, uint64_t Start, uint64_t Length) {
+    std::shared_lock lk {PageListMutex};
     Thread->LookupCache->AddBlockMapping(Address, Ptr, Start, Length);
   }
 
   void Context::ClearCodeCache(FEXCore::Core::InternalThreadState *Thread, bool AlsoClearIRCache) {
+    std::shared_lock lk {PageListMutex};
     Thread->LookupCache->ClearCache();
     Thread->CPUBackend->ClearCache();
     if (Thread->CompileService) {
@@ -585,6 +591,7 @@ namespace FEXCore::Context {
     }
 
     if (AlsoClearIRCache) {
+      std::lock_guard<std::mutex> lk(Thread->LocalIRCacheLock);
       Thread->LocalIRCache.clear();
     }
   }
@@ -844,19 +851,29 @@ namespace FEXCore::Context {
     uint64_t StartAddr {};
     uint64_t Length {};
 
-    // Do we already have this in the IR cache?
-    auto LocalEntry = Thread->LocalIRCache.find(GuestRIP);
+    {
+      std::lock_guard<std::mutex> lk(Thread->LocalIRCacheLock);
 
-    if (LocalEntry != Thread->LocalIRCache.end()) {
-      // Entry already exists
-      // pull in the data
-      IRList = LocalEntry->second.IR.get();
-      DebugData = LocalEntry->second.DebugData.get();
-      RAData = LocalEntry->second.RAData.get();
-      StartAddr = LocalEntry->second.StartAddr;
-      Length = LocalEntry->second.Length;
+      // Do we already have this in the IR cache?
+      auto LocalEntry = Thread->LocalIRCache.find(GuestRIP);
 
-      GeneratedIR = false;
+      if (LocalEntry != Thread->LocalIRCache.end()) {
+
+        if (LocalEntry->second.IsStale) {
+            Thread->LocalIRCache.erase(GuestRIP);
+            Thread->LookupCache->Erase(GuestRIP);
+        } else {
+          // Entry already exists
+          // pull in the data
+          IRList = LocalEntry->second.IR.get();
+          DebugData = LocalEntry->second.DebugData.get();
+          RAData = LocalEntry->second.RAData.get();
+          StartAddr = LocalEntry->second.StartAddr;
+          Length = LocalEntry->second.Length;
+
+          GeneratedIR = false;
+        }
+      }
     }
 
     {
@@ -1047,6 +1064,9 @@ namespace FEXCore::Context {
   }
 
   void Context::CompileBlockJit(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP) {
+    if (GuestRIP == 0x7ffff66a6008) {
+      printf("Compile Block: %p\n", GuestRIP);
+    }
     auto NewBlock = CompileBlock(Frame, GuestRIP);
 
     if (NewBlock == 0) {
@@ -1231,21 +1251,34 @@ namespace FEXCore::Context {
     }
   }
 
-  void FlushCodeRange(FEXCore::Core::InternalThreadState *Thread, uint64_t Start, uint64_t Length) {
+  void FlushCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length) {
+    printf("FlushCodeRange(%p, %p)\n", Start, Length);
+    std::lock_guard<std::mutex> lk(CTX->ThreadCreationMutex);
 
-    if (Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MMAN) {
-      auto lower = Thread->LookupCache->CodePages.lower_bound(Start >> 12);
-      auto upper = Thread->LookupCache->CodePages.upper_bound((Start + Length) >> 12);
+    if (CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MMAN) {
+      std::unique_lock lk {CTX->PageListMutex};
 
-      for (auto it = lower; it != upper; it++) {
-        for (auto Address: it->second)
-          Context::RemoveCodeEntry(Thread, Address);
-        it->second.clear();
+      for (int i = 0; i < CTX->Threads.size(); i++) {
+        auto Thread = CTX->Threads[i];
+        auto lower = Thread->LookupCache->CodePages.lower_bound(Start >> 12);
+        auto upper = Thread->LookupCache->CodePages.upper_bound((Start + Length) >> 12);
+
+        std::lock_guard<std::mutex> lk(Thread->LocalIRCacheLock);
+
+        for (auto it = lower; it != upper; it++) {
+          for (auto Entry: it->second) {
+            Thread->CPUBackend->BackpatchBlockAsInvalid(Entry.GuestCode, Entry.HostCode);
+            Thread->LocalIRCache.find(Entry.GuestCode)->second.IsStale = true;
+          }
+          it->second.clear();
+        }
       }
     }
   }
 
   void Context::RemoveCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
+    printf("Removing code entry: %p\n", GuestRIP);
+    std::lock_guard<std::mutex> lk(Thread->LocalIRCacheLock);
     Thread->LocalIRCache.erase(GuestRIP);
     Thread->LookupCache->Erase(GuestRIP);
   }
@@ -1273,8 +1306,9 @@ namespace FEXCore::Context {
   }
 
   bool Context::GetDebugDataForRIP(uint64_t RIP, FEXCore::Core::DebugData *Data) {
+    std::lock_guard<std::mutex> lk(ParentThread->LocalIRCacheLock);
     auto it = ParentThread->LocalIRCache.find(RIP);
-    if (it == ParentThread->LocalIRCache.end()) {
+    if (it == ParentThread->LocalIRCache.end() || it->second.IsStale) {
       return false;
     }
 

@@ -35,14 +35,19 @@ public:
     }
   }
 
-  std::map<uint64_t, std::vector<uint64_t>> CodePages;
+  struct CodePageEntry {
+    uint64_t GuestCode;
+    uint64_t HostCode;
+  };
+
+  std::map<uint64_t, std::vector<CodePageEntry>> CodePages;
 
   void AddBlockMapping(uint64_t Address, void *HostCode, uint64_t Start, uint64_t Length) { 
     auto InsertPoint = BlockList.emplace(Address, (uintptr_t)HostCode);
     LOGMAN_THROW_A(InsertPoint.second == true, "Dupplicate block mapping added");
 
     for (auto CurrentPage = Start >> 12, EndPage = (Start + Length) >> 12; CurrentPage <= EndPage; CurrentPage++) {
-      CodePages[CurrentPage].push_back(Address);
+      CodePages[CurrentPage].push_back({Address, (uint64_t)HostCode});
     }
 
     // There is no need to update L1 or L2, they will get updated on first lookup

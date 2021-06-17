@@ -17,6 +17,7 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <optional>
 #include <ostream>
 #include <set>
@@ -132,6 +133,8 @@ namespace FEXCore::Context {
     std::atomic_bool CoreShuttingDown{false};
 
     std::mutex IdleWaitMutex;
+    std::shared_mutex PageListMutex;
+    
     std::condition_variable IdleWaitCV;
     std::atomic<uint32_t> IdleWaitRefCount{};
 

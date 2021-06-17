@@ -4858,6 +4858,7 @@ OrderedNode *OpDispatchBuilder::LoadSource_WithOpSize(FEXCore::IR::RegisterClass
 
 OrderedNode *OpDispatchBuilder::GetDynamicPC(FEXCore::X86Tables::DecodedOp const& Op, int64_t Offset) {
   uint8_t GPRSize = CTX->Config.Is64BitMode ? 8 : 4;
+  //printf("GetDynamicPC: %lX, %d, %lx, %lx, %d\n", Op->PC, Op->InstSize, Offset, Entry, GPRSize);
   return _EntrypointOffset(Op->PC + Op->InstSize + Offset - Entry, GPRSize);
 }
 

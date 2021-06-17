@@ -37,7 +37,7 @@ namespace FEX::HLE::x32 {
 
           FEXCore::Context::AddNamedRegion(Thread->CTX, Result, length, offset, filename);
         }
-        FEXCore::Context::FlushCodeRange(Thread, (uintptr_t)Result, length);
+        FEXCore::Context::FlushCodeRange(Thread->CTX, (uintptr_t)Result, length);
       }
       return Result;
     });
@@ -53,7 +53,7 @@ namespace FEX::HLE::x32 {
 
           FEXCore::Context::AddNamedRegion(Thread->CTX, Result, length, pgoffset * 0x1000, filename);
         }
-        FEXCore::Context::FlushCodeRange(Thread, (uintptr_t)Result, length);
+        FEXCore::Context::FlushCodeRange(Thread->CTX, (uintptr_t)Result, length);
       }
 
       return Result;
@@ -65,7 +65,7 @@ namespace FEX::HLE::x32 {
 
       if (Result != -1) {
         FEXCore::Context::RemoveNamedRegion(Frame->Thread->CTX, (uintptr_t)addr, length);
-        FEXCore::Context::FlushCodeRange(Frame->Thread, (uintptr_t)addr, length);
+        FEXCore::Context::FlushCodeRange(Frame->Thread->CTX, (uintptr_t)addr, length);
       }
 
       return Result;
@@ -74,7 +74,7 @@ namespace FEX::HLE::x32 {
     REGISTER_SYSCALL_IMPL_X32(mprotect, [](FEXCore::Core::CpuStateFrame *Frame, void *addr, uint32_t len, int prot) -> uint64_t {
       uint64_t Result = ::mprotect(addr, len, prot);
       if (Result != -1 && prot & PROT_EXEC) {
-        FEXCore::Context::FlushCodeRange(Frame->Thread, (uintptr_t)addr, len);
+        FEXCore::Context::FlushCodeRange(Frame->Thread->CTX, (uintptr_t)addr, len);
       }
       SYSCALL_ERRNO();
     });

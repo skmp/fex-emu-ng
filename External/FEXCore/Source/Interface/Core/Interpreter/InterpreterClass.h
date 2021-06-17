@@ -33,6 +33,8 @@ public:
 
   bool HandleSIGBUS(int Signal, void *info, void *ucontext);
 
+  void BackpatchBlockAsInvalid(uintptr_t GuestCode, uintptr_t HostCode) override;
+
 private:
   FEXCore::Context::Context *CTX;
   FEXCore::Core::InternalThreadState *State;

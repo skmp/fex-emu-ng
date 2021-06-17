@@ -67,6 +67,7 @@ namespace FEXCore::Core {
     std::unique_ptr<FEXCore::IR::IRListView, FEXCore::IR::IRListViewDeleter> IR;
     std::unique_ptr<FEXCore::IR::RegisterAllocationData, FEXCore::IR::RegisterAllocationDataDeleter> RAData;
     std::unique_ptr<FEXCore::Core::DebugData> DebugData;
+    bool IsStale;
   };
 
   struct InternalThreadState {
@@ -90,6 +91,7 @@ namespace FEXCore::Core {
     std::unique_ptr<FEXCore::LookupCache> LookupCache;
 
     std::unordered_map<uint64_t, LocalIREntry> LocalIRCache;
+    std::mutex LocalIRCacheLock;
 
     std::unique_ptr<FEXCore::Frontend::Decoder> FrontendDecoder;
     std::unique_ptr<FEXCore::IR::PassManager> PassManager;

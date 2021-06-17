@@ -61,6 +61,7 @@ public:
   CodeBuffer AllocateNewCodeBuffer(size_t Size);
 
   void CopyNecessaryDataForCompileThread(CPUBackend *Original) override;
+  void BackpatchBlockAsInvalid(uintptr_t GuestCode, uintptr_t HostCode) override;
 
 private:
   FEX_CONFIG_OPT(ParanoidTSO, PARANOIDTSO);

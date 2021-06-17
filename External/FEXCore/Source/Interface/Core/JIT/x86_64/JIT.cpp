@@ -736,11 +736,30 @@ void *X86JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IRLi
   this->IR = nullptr;
 
   ready();
+  mov(rdi, STATE);
+  mov(rsi, 0xAABBCCDDAACCDDBB);
+  mov(qword [STATE + offsetof(FEXCore::Core::CPUState, rip)], rsi);
+  mov(rax, reinterpret_cast<uintptr_t>(&Context::Context::RemoveCodeEntryFromJit));
+  call(rax);
+  mov(rax, Dispatcher->AbsoluteLoopTopAddress);
+  jmp(rax);
 
   if (DebugData) {
     DebugData->HostCodeSize = reinterpret_cast<uintptr_t>(GuestExit) - reinterpret_cast<uintptr_t>(GuestEntry);
   }
   return GuestEntry;
+}
+
+void X86JITCore::BackpatchBlockAsInvalid(uintptr_t GuestCode, uintptr_t HostCode) {
+  Xbyak::CodeGenerator codegen(4096, (void*)HostCode, nullptr);
+
+  codegen.mov(codegen.rdi, STATE);
+  codegen.mov(codegen.rsi, GuestCode);
+  codegen.mov(qword [STATE + offsetof(FEXCore::Core::CPUState, rip)], codegen.rsi);
+  codegen.mov(codegen.rax, reinterpret_cast<uintptr_t>(&Context::Context::RemoveCodeEntryFromJit));
+  codegen.call(codegen.rax);
+  codegen.mov(codegen.rax, Dispatcher->AbsoluteLoopTopAddress);
+  codegen.jmp(codegen.rax);
 }
 
 uint64_t X86JITCore::ExitFunctionLink(X86JITCore *core, FEXCore::Core::CpuStateFrame *Frame, uint64_t *record) {

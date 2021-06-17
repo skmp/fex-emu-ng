@@ -29,9 +29,14 @@ namespace FEXCore::CPU {
 static void InterpreterExecution(FEXCore::Core::CpuStateFrame *Frame) {
   auto Thread = Frame->Thread;
 
+  std::lock_guard<std::mutex> lk(Thread->LocalIRCacheLock);
   auto LocalEntry = Thread->LocalIRCache.find(Thread->CurrentFrame->State.rip);
 
-  InterpreterOps::InterpretIR(Thread, Thread->CurrentFrame->State.rip, LocalEntry->second.IR.get(), LocalEntry->second.DebugData.get());
+  if (!LocalEntry->second.IsStale) {
+    InterpreterOps::InterpretIR(Thread, Thread->CurrentFrame->State.rip, LocalEntry->second.IR.get(), LocalEntry->second.DebugData.get());
+  } else {
+    Thread->CTX->RemoveCodeEntry(Thread, Thread->CurrentFrame->State.rip);
+  }
 }
 
 bool InterpreterCore::HandleSIGBUS(int Signal, void *info, void *ucontext) {
@@ -117,6 +122,10 @@ void *InterpreterCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR:
 
 FEXCore::CPU::CPUBackend *CreateInterpreterCore(FEXCore::Context::Context *ctx, FEXCore::Core::InternalThreadState *Thread, bool CompileThread) {
   return new InterpreterCore(ctx, Thread, CompileThread);
+}
+
+void InterpreterCore::BackpatchBlockAsInvalid(uintptr_t GuestCode, uintptr_t HostCode) {
+  
 }
 
 }

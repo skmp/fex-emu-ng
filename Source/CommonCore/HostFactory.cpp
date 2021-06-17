@@ -40,6 +40,7 @@ namespace HostFactory {
     bool NeedsOpDispatch() override { return false; }
 
     bool HandleSIGSEGV(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext);
+    void BackpatchBlockAsInvalid(uintptr_t GuestCode, uintptr_t HostCode) override;
 
   private:
     uint64_t ReturningStackLocation;

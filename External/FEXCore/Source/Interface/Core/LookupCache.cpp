@@ -75,6 +75,8 @@ void LookupCache::ClearCache() {
   BlockLinks.clear();
   // All code is gone, clear the block list
   BlockList.clear();
+  // clear page lists
+  CodePages.clear();
 }
 
 }
