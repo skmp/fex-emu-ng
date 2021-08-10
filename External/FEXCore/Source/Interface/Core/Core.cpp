@@ -34,6 +34,7 @@ $end_info$
 #include "FEXCore/Utils/Allocator.h"
 
 #include <xxhash.h>
+#include <charconv>
 #include <fstream>
 #include <unistd.h>
 #include <filesystem>
@@ -43,6 +44,74 @@ $end_info$
 #include <sys/stat.h>
 
 #include "Interface/Core/GdbServer.h"
+
+struct Mapping {
+  uintptr_t addr_begin, addr_end, lib_offset;
+  std::size_t mapping_size;
+  std::string libname;
+};
+
+void VerifyAddressIsNotArm(uint64_t GuestRIP) {
+  static std::vector<Mapping> mappings;
+  auto mapping_it = std::find_if(mappings.begin(), mappings.end(),
+                                 [GuestRIP](const auto& mapping) {
+                                    return GuestRIP >= mapping.addr_begin && GuestRIP < mapping.addr_end;
+                                 });
+  if (mapping_it == mappings.end()) {
+      auto pid = getpid();
+
+      std::ifstream mapsfile("/proc/" + std::to_string(pid) + "/maps");
+      std::string raw_mapping;
+      int mapping_index = -1;
+      while (std::getline(mapsfile, raw_mapping)) {
+        Mapping mapping;
+        const char* cursor = &*raw_mapping.begin();
+        const char* end = &*raw_mapping.end();
+        auto fc_result = std::from_chars(cursor, end, mapping.addr_begin, 16);
+        assert(fc_result.ptr && *fc_result.ptr == '-');
+        cursor = fc_result.ptr + 1;
+        fc_result = std::from_chars(cursor, end, mapping.addr_end, 16);
+        assert(fc_result.ptr && *fc_result.ptr == ' ');
+        cursor = fc_result.ptr + 1;
+        cursor += 5; // skip access permissions and space
+        fc_result = std::from_chars(cursor, end, mapping.lib_offset, 16);
+        assert(fc_result.ptr && *fc_result.ptr == ' ');
+        cursor = fc_result.ptr + 1;
+        cursor += 6; // skip time (?) and space
+        fc_result = std::from_chars(cursor, end, mapping.mapping_size, 16);
+        assert(fc_result.ptr && *fc_result.ptr == ' ');
+        cursor = fc_result.ptr;
+        while (cursor != end && *++cursor == ' ') {
+        }
+
+        mapping.libname = std::string(cursor, end);
+        mappings.push_back(std::move(mapping));
+
+        if (GuestRIP >= mapping.addr_begin && GuestRIP < mapping.addr_end) {
+          mapping_index = mappings.size();
+          continue;
+        }
+      }
+
+      if (mapping_index != -1) {
+        mapping_it = mappings.begin() + mapping_index;
+      }
+  }
+
+  if (mapping_it == mappings.end()) {
+    fprintf(stderr, "FUNCTION %p NOT FOUND IN MAPPED SPACE!\n", (void*)GuestRIP);
+    fflush(stdout);
+    abort();
+  }
+
+  // TODO: Also check /lib/aarch64-linux-gnu/ ?
+  if (mapping_it->libname.substr(0, 27) == "/usr/lib/aarch64-linux-gnu/") {
+    printf("FATAL: Tried to JIT from ARM code at address %p (offset %lx in library %s)\n",
+           (void*)GuestRIP, GuestRIP - (uintptr_t)mapping_it->addr_begin, mapping_it->libname.c_str());
+    fflush(stdout);
+    std::abort();
+  }
+}
 
 namespace FEXCore::CPU {
   bool CreateCPUCore(FEXCore::Context::Context *CTX) {
@@ -1096,6 +1165,8 @@ namespace FEXCore::Context {
   }
 
   uintptr_t Context::CompileBlock(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP) {
+    VerifyAddressIsNotArm(GuestRIP);
+
     auto Thread = Frame->Thread;
 
     // Is the code in the cache?
