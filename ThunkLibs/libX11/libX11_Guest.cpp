@@ -30,7 +30,34 @@ $end_info$
 
 #include <vector>
 
+// equivalent of fexfn_pack_
+template<auto Thunk, typename Result, typename Arg1 /* TODO: Make variadic */>
+Result CallHostThunk(Arg1 a_0) {
+    // TODO: r15 is *not* safe to modify
+    // TODO: Could we query the parameter through a Thunk instead?
+    uintptr_t host_addr;
+    //    // TODO: .intel_syntax/.att_syntax
+    asm ("mov %%r15, %[HostAddr]" : [HostAddr] "=r" (host_addr));
+
+    struct {
+        Arg1 a_0;
+        Result rv;
+        uintptr_t func_addr_host;
+    } args;
+
+    args.a_0 = a_0;
+    args.func_addr_host = host_addr;
+
+    Thunk(&args);
+
+    return args.rv;
+}
+
 extern "C" {
+
+    // TODO: Make part of LOAD_LIB?
+    MAKE_THUNK(X11, make_host_function_guest_callable, "0x27, 0x7e, 0xb7, 0x69, 0x5b, 0xe9, 0xab, 0x12, 0x6e, 0xf7, 0x85, 0x9d, 0x4b, 0xc9, 0xa2, 0x44, 0x46, 0xcf, 0xbd, 0xb5, 0x87, 0x43, 0xef, 0x28, 0xa2, 0x65, 0xba, 0xfc, 0x89, 0x0f, 0x77, 0x79");
+
     char* XGetICValues(XIC ic, ...) {
         printf("XGetICValues\n");
         va_list ap;
@@ -81,7 +108,46 @@ extern "C" {
         printf("libX11: XESetCloseDisplay\n");
         return nullptr;
     }
-      
+
+    XImage *XCreateImage(
+        Display* a_0           /* display */,
+        Visual*  a_1           /* visual */,
+        unsigned int a_2       /* depth */,
+        int          a_3       /* format */,
+        int          a_4       /* offset */,
+        char*        a_5       /* data */,
+        unsigned int a_6       /* width */,
+        unsigned int a_7       /* height */,
+        int          a_8       /* bitmap_pad */,
+        int          a_9       /* bytes_per_line */
+            ) {
+        struct {
+            Display* a_0;
+            Visual* a_1;
+            unsigned int a_2;
+            int a_3;
+            int a_4;
+            char* a_5;
+            unsigned int a_6;
+            unsigned int a_7;
+            int a_8;
+            int a_9;
+            XImage* rv;
+        } args;
+        args.a_0 = a_0;args.a_1 = a_1;args.a_2 = a_2;args.a_3 = a_3;args.a_4 = a_4;args.a_5 = a_5;args.a_6 = a_6;args.a_7 = a_7;args.a_8 = a_8;args.a_9 = a_9;
+        fexthunks_libX11_XCreateImage(&args);
+
+        struct args2_t {
+            uintptr_t host_addr;
+            uintptr_t guest_addr; // Function to call when branching to host_addr
+        };
+        args2_t args2 = { reinterpret_cast<uintptr_t>(args.rv->f.destroy_image),
+                          reinterpret_cast<uintptr_t>(CallHostThunk<fexthunks_libX11_CallDestroyImageCallback, int, XImage*>) };
+        // TODO: More apt name might be "link_host_address_to_guest_function"
+        fexthunks_X11_make_host_function_guest_callable(&args2);
+
+        return args.rv;
+    }
 }
 
 struct {

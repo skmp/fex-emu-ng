@@ -32,6 +32,9 @@ $end_info$
 #include <unistd.h>
 #include <string.h>
 
+uint64_t OMGTARGET = 0;
+uint64_t blessed_function = 0;
+
 namespace FEXCore::CPU {
 
 void Arm64JITCore::CopyNecessaryDataForCompileThread(CPUBackend *Original) {
@@ -824,6 +827,17 @@ void *Arm64JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IR
 
   PendingTargetLabel = nullptr;
 
+  if (Entry == blessed_function) {
+      LoadConstant(TMP1, Entry);
+      str(TMP1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, State.gregs[15])));
+      LoadConstant(FEXCore::CPU::SRA64[FEXCore::X86State::REG_R15], Entry);
+
+      LoadConstant(TMP2, ThreadSharedData.Dispatcher->AbsoluteLoopTopAddress);
+      LoadConstant(TMP3, OMGTARGET);
+      str(TMP3, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, State.rip)));
+      br(TMP2);
+  } else {
+
   for (auto [BlockNode, BlockHeader] : IR->GetBlocks()) {
     using namespace FEXCore::IR;
 #if defined(ASSERTIONS_ENABLED) && ASSERTIONS_ENABLED
@@ -864,6 +878,7 @@ void *Arm64JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IR
       DebugData->Subblocks.back().HostCodeSize = Buffer->GetOffsetAddress<uintptr_t>(GetCursorOffset()) - DebugData->Subblocks.back().HostCodeStart;
     }
   }
+  } // End of new Thunking hack
 
   // Make sure last branch is generated. It certainly can't be eliminated here.
   if (PendingTargetLabel)

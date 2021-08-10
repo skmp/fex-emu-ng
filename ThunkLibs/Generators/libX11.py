@@ -467,6 +467,9 @@ fn("int XIfEvent(Display*, XEvent*, XIfEventCBFN*, XPointer)"); no_thunk(); no_p
 fn("int XIfEvent_internal(Display*, XEvent*, XIfEventCBFN*, XPointer)"); no_ldr();
 cb("int XIfEventCB(Display*, XEvent*, XPointer)")
 
+# TODO: no_ldr?
+fn("int CallDestroyImageCallback(XImage*)"); no_unpack();
+
 fn("XSetErrorHandlerCBFN* XSetErrorHandler(XErrorHandler)");  no_thunk(); no_pack(); no_unpack(); no_tab_unpack()
 fn("XSetErrorHandlerCBFN* XSetErrorHandler_internal(XErrorHandler)"); no_ldr();
 
@@ -554,7 +557,7 @@ fn("int XDefaultScreen(Display*)")
 fn("int XDisplayWidth(Display*, int)")
 fn("int XMatchVisualInfo(Display*, int, int, int, XVisualInfo*)")
 fn("int XPutImage(Display*, Drawable, GC, XImage*, int, int, int, int, unsigned int, unsigned int)")
-fn("XImage* XCreateImage(Display*, Visual*, unsigned int, int, int, char*, unsigned int, unsigned int, int, int)")
+fn("XImage* XCreateImage(Display*, Visual*, unsigned int, int, int, char*, unsigned int, unsigned int, int, int)"); no_pack(); no_unpack();
 fn("int XDisplayHeight(Display*, int)")
 
 fn("void* _XGetRequest(Display*, unsigned char, size_t)")

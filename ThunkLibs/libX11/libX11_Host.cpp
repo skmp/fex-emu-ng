@@ -199,6 +199,49 @@ XSetErrorHandlerCBFN* fexfn_impl_libX11_XSetErrorHandler_internal(XErrorHandler 
 
 #include "function_unpacks.inl"
 
+template<typename Result, typename Arg1>
+void fexfn_unpack_guest_funcptr_call(void* argsv) {
+    struct arg_t {
+        Arg1 a_0;
+        Result rv;
+        uintptr_t func_addr_host;
+    };
+
+    auto args = (arg_t*)argsv;
+    args->rv = reinterpret_cast<Result(*)(Arg1)>(args->func_addr_host)(args->a_0);
+}
+
+void fexfn_unpack_libX11_CallDestroyImageCallback(void* argsv) {
+    fexfn_unpack_guest_funcptr_call<int, XImage*>(argsv);
+}
+
+static void fexfn_unpack_libX11_XCreateImage(void *argsv){
+    struct arg_t {
+        Display* a_0;
+        Visual* a_1;
+        unsigned int a_2;
+        int a_3;
+        int a_4;
+        char* a_5;
+        unsigned int a_6;
+        unsigned int a_7;
+        int a_8;
+        int a_9;
+        XImage* rv;
+    };
+    auto args = (arg_t*)argsv;
+    args->rv = fexldr_ptr_libX11_XCreateImage(args->a_0,
+                                              args->a_1,
+                                              args->a_2,
+                                              args->a_3,
+                                              args->a_4,
+                                              args->a_5,
+                                              args->a_6,
+                                              args->a_7,
+                                              args->a_8,
+                                              args->a_9);
+}
+
 static ExportEntry exports[] = {
     #include "tab_function_unpacks.inl"
     { nullptr, nullptr }

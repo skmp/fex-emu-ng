@@ -28,6 +28,8 @@ struct LoadlibArgs {
 
 static thread_local FEXCore::Core::InternalThreadState *Thread;
 
+extern uint64_t OMGTARGET;
+extern uint64_t blessed_function;
 
 namespace FEXCore {
 
@@ -41,6 +43,11 @@ namespace FEXCore {
                 // sha256(fex:loadlib)
                 { 0x27, 0x7e, 0xb7, 0x69, 0x5b, 0xe9, 0xab, 0x12, 0x6e, 0xf7, 0x85, 0x9d, 0x4b, 0xc9, 0xa2, 0x44, 0x46, 0xcf, 0xbd, 0xb5, 0x87, 0x43, 0xef, 0x28, 0xa2, 0x65, 0xba, 0xfc, 0x89, 0x0f, 0x77, 0x80},
                 &LoadLib
+            },
+            {
+                // TODO: Remove placeholder hash
+                { 0x27, 0x7e, 0xb7, 0x69, 0x5b, 0xe9, 0xab, 0x12, 0x6e, 0xf7, 0x85, 0x9d, 0x4b, 0xc9, 0xa2, 0x44, 0x46, 0xcf, 0xbd, 0xb5, 0x87, 0x43, 0xef, 0x28, 0xa2, 0x65, 0xba, 0xfc, 0x89, 0x0f, 0x77, 0x79},
+                &MakeHostFunctionGuestCallable
             }
         };
 
@@ -52,6 +59,19 @@ namespace FEXCore {
             Thread->CurrentFrame->State.gregs[FEXCore::X86State::REG_RSI] = (uintptr_t)arg1;
 
             Thread->CTX->HandleCallback((uintptr_t)callback);
+        }
+
+        static void MakeHostFunctionGuestCallable(void* argsv) {
+            struct args_t {
+                uintptr_t host_addr;
+                uintptr_t guest_addr; // Function to call when branching to host_addr
+            };
+
+            auto args = reinterpret_cast<args_t*>(argsv);
+
+            OMGTARGET = args->guest_addr;
+            blessed_function = args->host_addr;
+//            Thread->CTX->CompileBlockJit()
         }
 
         static void LoadLib(void *ArgsV) {

@@ -45,6 +45,8 @@ $end_info$
 
 #include "Interface/Core/GdbServer.h"
 
+extern uint64_t blessed_function;
+
 struct Mapping {
   uintptr_t addr_begin, addr_end, lib_offset;
   std::size_t mapping_size;
@@ -52,6 +54,10 @@ struct Mapping {
 };
 
 void VerifyAddressIsNotArm(uint64_t GuestRIP) {
+  if (GuestRIP == blessed_function) {
+    return;
+  }
+
   static std::vector<Mapping> mappings;
   auto mapping_it = std::find_if(mappings.begin(), mappings.end(),
                                  [GuestRIP](const auto& mapping) {
