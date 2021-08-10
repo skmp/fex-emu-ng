@@ -562,5 +562,6 @@ fn("int XDisplayHeight(Display*, int)")
 
 fn("void* _XGetRequest(Display*, unsigned char, size_t)")
 fn("Status _XReply(Display*, xReply*, int, Bool)")
+fn("int _XRead(Display*, char*, long)");
 
 Generate()
