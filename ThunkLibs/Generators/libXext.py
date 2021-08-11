@@ -104,6 +104,7 @@ fn("XSyncCounter XSyncCreateCounter(Display*, XSyncValue)")
 fn("XSyncFence XSyncCreateFence(Display*, Drawable, int)")
 fn("XSyncSystemCounter* XSyncListSystemCounters(Display*, int*)")
 
-
+fn("XExtDisplayInfo* XextFindDisplay(XExtensionInfo*, Display*)")
+fn("XExtDisplayInfo* XextAddDisplay(XExtensionInfo*, Display*, _Xconst char*, XExtensionHooks*, int, XPointer)");
 
 Generate()

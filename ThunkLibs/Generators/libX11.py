@@ -541,7 +541,10 @@ fn("XFontStruct* XLoadQueryFont(Display*, const char*)")
 fn("_XGC* XCreateGC(Display*, Drawable, long unsigned int, XGCValues*)")
 fn("XImage* XGetImage(Display*, Drawable, int, int, unsigned int, unsigned int, long unsigned int, int)")
 fn("_XIM* XOpenIM(Display*, _XrmHashBucketRec*, char*, char*)")
+
 fn("KeySym XkbKeycodeToKeysym(Display *, KeyCode, unsigned int, unsigned int)")
+fn("Bool XkbSetDetectableAutoRepeat(Display *, Bool, Bool *)")
+
 fn("Bool XCheckWindowEvent(Display *, Window, long, XEvent *)")
 fn("int XDefineCursor(Display *, Window, Cursor)")
 fn("int XUndefineCursor(Display *, Window)")
@@ -553,5 +556,7 @@ fn("int XPutImage(Display*, Drawable, GC, XImage*, int, int, int, int, unsigned 
 fn("XImage* XCreateImage(Display*, Visual*, unsigned int, int, int, char*, unsigned int, unsigned int, int, int)")
 fn("int XDisplayHeight(Display*, int)")
 
+fn("void* _XGetRequest(Display*, unsigned char, size_t)")
+fn("Status _XReply(Display*, xReply*, int, Bool)")
 
 Generate()

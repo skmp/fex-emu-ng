@@ -10,6 +10,7 @@ $end_info$
 #include <utility>
 
 #include <X11/Xlib.h>
+#include <X11/Xproto.h>
 #include <X11/Xutil.h>
 #include <X11/Xresource.h>
 #include "common/Host.h"
