@@ -105,5 +105,4 @@ static ExportEntry exports[] = {
 
 #include "ldr.inl"
 
-EXPORTS_WITH_CALLBACKS(libX11) 
-
+EXPORTS_WITH_CALLBACKS(libX11, callback_unpacks)

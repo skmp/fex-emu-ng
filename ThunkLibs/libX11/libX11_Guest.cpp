@@ -89,4 +89,4 @@ struct {
     #include "callback_unpacks_header_init.inl"
 };
 
-LOAD_LIB_WITH_CALLBACKS(libX11)
+LOAD_LIB_WITH_CALLBACKS(libX11, callback_unpacks)
