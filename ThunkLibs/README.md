@@ -1,4 +1,5 @@
-# FEX Library Thunking (Thunklibs)
+#
+ FEX Library Thunking (Thunklibs)
 FEX supports special guest libraries that call out to host code for speed and compatibility.
 
 We support both guest->host thunks, as well as host->guest callbacks
@@ -23,7 +24,7 @@ We currently don't have any unit tests for the guest libraries, only for OP_THUN
 There are several parts that make this possible. This is a rough outline.
 
 In FEX
-- Opcode 0xF 0x3D (IR:OP_THUNK) is used for the Guest -> Host transition. Register RSI (arg0 in guest) is passed as arg0 in host. Thunks are identified by a string in the form `library:function` that directly follows the Guest opcode.
+- Opcode 0xF 0x3D (IR::OP_THUNK) is used for the Guest -> Host transition. Register RSI (arg0 in guest) is passed as arg0 in host. Thunks are identified by a string in the form `library:function` that directly follows the Guest opcode.
 - `Context::HandleCallback` does the Host -> Guest transition, and returns when the Guest function returns.
 - A special thunk, `fex:loadlib` is used to load and initialize a matching host lib. For more details, look in `ThunkHandler_impl::LoadLib`
 - `ThunkHandler_impl::CallCallback` is provided to the host libs, so they can call callbacks. It prepares guest arguments and uses `Context::HandleCallback` 
@@ -34,10 +35,11 @@ ThunkLibs, Library loading
 - In Host code, the real host library is loaded using dlopen and dlsym (see ldr generation)
 
 ThunkLibs, Guest -> Host
-- In Guest code (guest packer), a packer takes care of packing tha arguments & return value into a struct in Guest stack. The packer is usually exported as a symbol from the Guest library.
-- in Guest code (guest thunk), a thunk does the Guest -> Host transition, and passes the struct ptr as an argument
+- In Guest code (guest packer), a packer takes care of packing the arguments & return value into a struct in Guest stack. The packer is usually exported as a symbol from the Guest library.
+- In Guest code (guest thunk), a thunk does the Guest -> Host transition via OP_THUNK, and passes the struct pointer as an argument
+- FEX handles OP_THUNK and looks up the Host function from the opcode argument
 - In Host code (host unpacker), an unpacker takes the arguments from the struct, and calls a function pointer with the implementation of that function. It also stores the return value, if any, to the struct.
-- In Host code (host unpacker), the the unpacker returns, and we do an implicit Host -> Guest transition
+- In Host code (host unpacker), the unpacker returns, and we do an implicit Host -> Guest transition
 - In Guest code (guest packer), the return value is loaded from the struct and returned, if needed
 
 ThunkLibs, Host -> Guest. This is only possible while handling a Guest -> Host call (ie, callbacks). 

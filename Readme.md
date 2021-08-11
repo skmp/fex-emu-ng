@@ -1,3 +1,11 @@
+My setup:
+
+
+To run Xonotic:
+libstdc++6:amd64 libz1g:amd64
+sudo apt install libgles1:amd64 libgles2:amd64 libglx-mesa0:amd64 libgl1-mesa-dri:amd64 libgl1-mesa-glx:amd64 mesa-utils:amd64 mesa-utils-extra:amd64
+
+
 # FEX - Fast x86 emulation frontend
 FEX allows you to run x86 and x86-64 binaries on an AArch64 host, similar to qemu-user and box86.
 It has native support for a rootfs overlay, so you don't need to chroot, as well as some thunklibs so it can forward things like GL to the host.
