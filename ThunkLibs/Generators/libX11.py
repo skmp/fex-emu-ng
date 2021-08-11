@@ -430,6 +430,7 @@ fn("Window XCreateSimpleWindow(Display*, Window, int, int, unsigned int, unsigne
 fn("Window XDefaultRootWindow(Display*)")
 fn("Window XGetSelectionOwner(Display*, Atom)")
 fn("Window XRootWindow(Display*, int)")
+
 fn("XExtCodes* XAddExtension(Display*)")
 fn("XExtCodes* XInitExtension(Display*, const char*)")
 fn("XFontSetExtents* XExtentsOfFontSet(XFontSet)")

@@ -355,7 +355,11 @@ bool Decoder::NormalOp(FEXCore::X86Tables::X86InstInfo const *Info, uint16_t Op)
   }
 
   if (Info->Type == FEXCore::X86Tables::TYPE_INVALID) {
-    LogMan::Msg::D("Invalid or Unknown instruction: %s 0x%04x 0x%lx", Info->Name, Op, DecodeInst->PC);
+//    LogMan::Msg::D("Invalid or Unknown instruction: %s 0x%04x 0x%lx", Info->Name, Op, DecodeInst->PC);
+//    LogMan::Msg::D("Invalid or Unknown instruction: %s 0x%04x 0x%lx", Info->Name, Op, DecodeInst->PC);
+    while (true) {
+                                  printf("Hellooooo\n");
+    }
     return false;
   }
 

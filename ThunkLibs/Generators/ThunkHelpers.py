@@ -156,10 +156,14 @@ def GenerateFunctionPackPublic(lib, function):
 
 def GenerateFunctionPack(lib, function):
     print("static " + function["return"] + " fexfn_pack_" + function["name"] + GenerateThunk_args(function["args"]) + "{")
+    print("printf(\"TRACE: %s\\n\", __FUNCTION__);");
     if GenerateThunk_has_struct(function["return"], function["args"]):
         print("struct " + GenerateThunk_struct(function["return"], function["args"]) + " args;")
         print(GenerateThunk_args_assignment(function["args"]))
         print("fexthunks_" + lib["name"] + "_" + function["name"] + "(&args);")
+
+        if function["return"] != "void":
+            print("printf(\"  pack returning %lx\\n\", (unsigned long)args.rv);");
 
         if function["return"] != "void":
             print("return args.rv;")
@@ -189,15 +193,25 @@ def GenerateFunctionUnpack_args(args):
 def GenerateFunctionUnpack(lib, function):
     print("static void fexfn_unpack_" + lib["name"] + "_" + function["name"] + "(void *argsv){")
 
+    print("printf(\"TRACE: %s\\n\", __FUNCTION__);");
+
     if GenerateThunk_has_struct(function["return"], function["args"]):
         print("struct arg_t "+ GenerateThunk_struct(function["return"], function["args"]) + ";")
         print("auto args = (arg_t*)argsv;")
+
+        for idx,arg in enumerate(function["args"]):
+            if "*" in arg or arg == "GC":
+                print("printf(\"  arg: " + arg + " = %p\\n\", args->a_" + str(idx) + ");");
 
         if function["return"] != "void":
             print("args->rv = ");
 
     print("fexldr_ptr_" + lib["name"] + "_" + function["name"])
     print(GenerateFunctionUnpack_args(function["args"]) + ";")
+
+    if function["return"] != "void":
+        print("printf(\"  returned %lx\\n\", (unsigned long)args->rv);");
+
     print("}")
 
 ###
@@ -256,6 +270,7 @@ def GenerateCallbackUnpackHeaderInit(lib, callback):
 def GenerateCallbackUnpack(lib, function):
     print("static void fexfn_unpack_" + lib["name"] + "_" + function["name"] + "(uintptr_t cb, void *argsv){")
 
+    print("printf(\"TRACE: Callback %s\\n\", __FUNCTION__);");
     print("typedef " + function["return"] + " fn_t " + GenerateThunk_args(function["args"]) + ";")
     print("auto callback = reinterpret_cast<fn_t*>(cb);")
     
