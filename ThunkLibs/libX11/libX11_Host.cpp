@@ -242,6 +242,30 @@ static void fexfn_unpack_libX11_XCreateImage(void *argsv){
                                               args->a_9);
 }
 
+static void fexfn_unpack_libX11_XFree(void* argsv) {
+    struct arg_t {
+        void* ptr;
+        int rv;
+    };
+    auto args = (arg_t*)argsv;
+    printf("[HOST] fexfn_unpack_libX11_XFree: %p\n", args->ptr);
+
+    // Xlibint's Xcalloc is a macro evaluating to calloc, but XFree is a library function.
+    // This causes problems for Xlibint users (e.g. XF86VidModeGetAllModeLines), which will
+    // then attempt to free memory allocated with guest-calloc() using the host-free().
+    //
+    // One solution to this is to track *all* pointers allocated through the thunked libX11 and check here
+    // to see how to free them.
+    //
+    // Another solution is to read /proc/pid/maps and see if we can distinguish between host and guest heap there
+
+    if (reinterpret_cast<uintptr_t>(args->ptr) >= 0x100000000000) {
+        args->rv = fexldr_ptr_libX11_XFree(args->ptr);
+    } else {
+        // TODO: Call guest free
+    }
+}
+
 static ExportEntry exports[] = {
     #include "tab_function_unpacks.inl"
     { nullptr, nullptr }

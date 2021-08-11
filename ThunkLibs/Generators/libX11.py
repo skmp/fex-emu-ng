@@ -497,7 +497,7 @@ fn("int XFreeExtensionList(char**)")
 fn("int XFreeFont(Display*, XFontStruct*)")
 fn("int XFreeGC(Display*, GC)")
 fn("int XFreePixmap(Display*, Pixmap)")
-fn("int XFree(void*)")
+fn("int XFree(void*)"); no_unpack();
 fn("int XGetErrorDatabaseText(Display*, const char*, const char*, const char*, char*, int)")
 fn("int XGetErrorText(Display*, int, char*, int)")
 fn("int XGetEventData(Display*, XGenericEventCookie*)")
