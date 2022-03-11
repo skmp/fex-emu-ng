@@ -49,3 +49,6 @@
 	shallow = true
 	path = External/robin-map
 	url = https://github.com/Tessil/robin-map.git
+[submodule "External/fex-assorted-tests-bins"]
+	path = External/fex-assorted-tests-bins
+	url = https://github.com/FEX-Emu/fex-assorted-tests-bins

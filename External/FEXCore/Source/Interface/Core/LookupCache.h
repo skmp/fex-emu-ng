@@ -7,6 +7,7 @@
 #include <stddef.h>
 #include <utility>
 #include <vector>
+#include <mutex>
 
 namespace FEXCore {
 namespace Context {
@@ -32,6 +33,7 @@ public:
     if (HostCode) {
       return HostCode;
     } else {
+      std::lock_guard<std::recursive_mutex> lk(WriteLock);
       auto HostCode = BlockList.find(Address);
 
       if (HostCode != BlockList.end()) {
@@ -45,7 +47,9 @@ public:
 
   std::map<uint64_t, std::vector<uint64_t>> CodePages;
 
-  void AddBlockMapping(uint64_t Address, void *HostCode, uint64_t Start, uint64_t Length) { 
+  void AddBlockMapping(uint64_t Address, void *HostCode, uint64_t Start, uint64_t Length) {
+    std::lock_guard<std::recursive_mutex> lk(WriteLock);
+
 #if defined(ASSERTIONS_ENABLED) && ASSERTIONS_ENABLED
     auto InsertPoint =
 #endif
@@ -65,6 +69,8 @@ public:
 
   void Erase(uint64_t Address) {
 
+    std::lock_guard<std::recursive_mutex> lk(WriteLock);
+
     // Sever any links to this block
     auto lower = BlockLinks.lower_bound({Address, 0});
     auto upper = BlockLinks.upper_bound({Address, UINTPTR_MAX});
@@ -78,7 +84,8 @@ public:
     // Do L1
     auto &L1Entry = reinterpret_cast<LookupCacheEntry*>(L1Pointer)[Address & L1_ENTRIES_MASK];
     if (L1Entry.GuestCode == Address) {
-      L1Entry.GuestCode = L1Entry.HostCode = 0;
+      L1Entry.GuestCode = 0;
+      // leave L1Entry.HostCode as is
     }
 
     // Do full map
@@ -101,6 +108,8 @@ public:
 
 
   void AddBlockLink(uint64_t GuestDestination, uintptr_t HostLink, const std::function<void()> &delinker) {
+    std::lock_guard<std::recursive_mutex> lk(WriteLock);
+
     BlockLinks.insert({{GuestDestination, HostLink}, delinker});
   }
 
@@ -116,8 +125,12 @@ public:
   constexpr static size_t L1_ENTRIES = 1 * 1024 * 1024; // Must be a power of 2
   constexpr static size_t L1_ENTRIES_MASK = L1_ENTRIES - 1;
 
+  std::recursive_mutex WriteLock;
+
 private:
   void CacheBlockMapping(uint64_t Address, uintptr_t HostCode) { 
+    std::lock_guard<std::recursive_mutex> lk(WriteLock);
+
     // Do L1
     auto &L1Entry = reinterpret_cast<LookupCacheEntry*>(L1Pointer)[Address & L1_ENTRIES_MASK];
     L1Entry.GuestCode = Address;
@@ -174,6 +187,8 @@ private:
     if (L1Entry.GuestCode == Address) {
       return L1Entry.HostCode;
     }
+
+    std::lock_guard<std::recursive_mutex> lk(WriteLock);
 
     auto FullAddress = Address;
     Address = Address & (VirtualMemSize -1);

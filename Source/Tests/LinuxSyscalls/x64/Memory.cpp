@@ -52,6 +52,7 @@ namespace FEX::HLE::x64 {
 
       auto Thread = Frame->Thread;
       if (Result != -1) {
+        FEXCore::Context::ClearMemoryMap(Thread->CTX, (uintptr_t)addr, length);
         FEXCore::Context::RemoveNamedRegion(Thread->CTX, (uintptr_t)addr, length);
         FEXCore::Context::FlushCodeRange(Thread, (uintptr_t)addr, length);
       }
@@ -80,6 +81,8 @@ namespace FEX::HLE::x64 {
 
       auto Thread = Frame->Thread;
       if (Result != -1) {
+        FEXCore::Context::SetMemoryMap(Thread->CTX, Result, length, prot & PROT_WRITE);
+
         if (!(flags & MAP_ANONYMOUS)) {
           auto filename = get_fdpath(fd);
 
@@ -101,6 +104,10 @@ namespace FEX::HLE::x64 {
       uint64_t Result = ::mprotect(addr, len, prot);
 
       auto Thread = Frame->Thread;
+      if (Result != -1) {
+        FEXCore::Context::SetMemoryMap(Thread->CTX, (uintptr_t)addr, len, prot & PROT_WRITE);
+      }
+
       if (Result != -1 && prot & PROT_EXEC) {
         FEXCore::Context::FlushCodeRange(Thread, (uintptr_t)addr, len);
       }

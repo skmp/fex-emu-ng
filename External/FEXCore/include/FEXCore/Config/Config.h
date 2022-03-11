@@ -29,8 +29,10 @@ namespace Handler {
       return "0";
     else if (Value == "mman")
       return "1";
-    else if (Value == "full")
+    else if (Value == "mtrack")
       return "2";
+    else if (Value == "full")
+      return "3";
     return "0";
   }
 }
@@ -49,6 +51,7 @@ namespace Handler {
   enum ConfigSMCChecks {
     CONFIG_SMC_NONE,
     CONFIG_SMC_MMAN,
+    CONFIG_SMC_MTRACK,
     CONFIG_SMC_FULL,
   };
 

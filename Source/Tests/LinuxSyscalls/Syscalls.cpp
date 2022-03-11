@@ -530,6 +530,7 @@ uint64_t SyscallHandler::HandleBRK(FEXCore::Core::CpuStateFrame *Frame, void *Ad
         uint64_t RemainingSize = DataSpaceMaxSize - NewSizeAligned;
         // We have pages we can unmap
         FEXCore::Allocator::munmap(reinterpret_cast<void*>(DataSpace + NewSizeAligned), RemainingSize);
+        FEXCore::Context::ClearMemoryMap(Frame->Thread->CTX, DataSpace + NewSizeAligned, RemainingSize);
         DataSpaceMaxSize = NewSizeAligned;
       }
       else if (NewSize > DataSpaceMaxSize) {
@@ -548,6 +549,10 @@ uint64_t SyscallHandler::HandleBRK(FEXCore::Core::CpuStateFrame *Frame, void *Ad
         else {
           NewBRK = (uint64_t)static_cast<FEX::HLE::x32::x32SyscallHandler*>(FEX::HLE::_SyscallHandler)->GetAllocator()->
             mmap((void*)(DataSpace + DataSpaceMaxSize), AllocateNewSize, PROT_READ | PROT_WRITE, MAP_FIXED_NOREPLACE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        }
+
+        if (NewBRK != ~0ULL) {
+          FEXCore::Context::SetMemoryMap(Frame->Thread->CTX, NewBRK, AllocateNewSize, 1);
         }
 
         if (NewBRK != ~0ULL && NewBRK != (DataSpace + DataSpaceMaxSize)) {

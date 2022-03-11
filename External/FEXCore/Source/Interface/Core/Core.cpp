@@ -21,6 +21,7 @@ $end_info$
 #include "Interface/IR/Passes/RegisterAllocationPass.h"
 #include "Interface/IR/Passes.h"
 #include "Interface/IR/PassManager.h"
+#include <FEXHeaderUtils/ScopedSignalMask.h>
 
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Core/CodeLoader.h>
@@ -42,6 +43,8 @@ $end_info$
 #include <FEXCore/Utils/LogManager.h>
 #include <FEXCore/Utils/Threads.h>
 #include <FEXHeaderUtils/Syscalls.h>
+#include <FEXHeaderUtils/TypeDefines.h>
+#include <FEXCore/Utils/MathUtils.h>
 
 #include <algorithm>
 #include <array>
@@ -189,6 +192,45 @@ namespace FEXCore::Context {
     return NewThreadState;
   }
 
+  bool Context::HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext) {
+    auto CTX = Thread->CTX;
+
+    auto FaultAddress = (uintptr_t)((siginfo_t*)info)->si_addr;
+
+    bool DoFlush = false;
+
+    {
+      FHU::ScopedSignalMaskWithSharedMutex lk(CTX->MemoryEntryMutex, true);
+
+      auto Entry = CTX->MemoryMaps.upper_bound(FaultAddress);
+
+      if (Entry != CTX->MemoryMaps.begin()) {
+        --Entry;
+
+        if (Entry->first <= FaultAddress && (Entry->first + Entry->second.Length) > FaultAddress) {
+          if (Entry->second.Writable) {
+            DoFlush = true;
+          }
+        }
+      }
+    }
+
+    // Do FlushCodeRange outside MemoryEntryMutex lock to avoid CompileCode deadlock
+    if (DoFlush) {
+      std::lock_guard<std::mutex> lk(CTX->ThreadCreationMutex);
+      // Mark as read write before flush, so that if code is compiled after the Flush but before returning, the segfault will be re-raised
+      auto FaultBase = FEXCore::AlignDown(FaultAddress, FHU::FEX_PAGE_SIZE);
+      auto rv = mprotect((void*)FaultBase, FHU::FEX_PAGE_SIZE, PROT_READ | PROT_WRITE);
+      LogMan::Throw::AFmt(rv == 0, "mprotect({}, {}) failed", FaultBase, FHU::FEX_PAGE_SIZE);
+      for (auto &Thread : CTX->Threads) {
+        FlushCodeRange(Thread, FaultBase, FHU::FEX_PAGE_SIZE);
+      }
+      return true;
+    } else {
+      return false;
+    }
+  }
+
   FEXCore::Core::InternalThreadState* Context::InitCore(FEXCore::CodeLoader *Loader) {
     // Initialize the CPU core signal handlers
     switch (Config.Core) {
@@ -212,6 +254,10 @@ namespace FEXCore::Context {
     default:
       ERROR_AND_DIE_FMT("Unknown core configuration");
       break;
+    }
+
+    if (Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MTRACK) {
+      SignalDelegation->RegisterHostSignalHandler(SIGSEGV, HandleSegfault, true);
     }
 
     // Initialize GDBServer after the signal handlers are installed
@@ -452,6 +498,7 @@ namespace FEXCore::Context {
           : nullptr),
         decltype(Entry.DebugData)(new Core::DebugData())
       };
+      std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
       Thread->LocalIRCache.insert({Addr, std::move(Entry)});
     };
 
@@ -636,7 +683,62 @@ namespace FEXCore::Context {
     Thread->LookupCache->AddBlockMapping(Address, Ptr, Start, Length);
   }
 
+  void Context::SMCMarkReadOnly(uint64_t Start, uint64_t Length) {
+    auto Base = Start & FHU::FEX_PAGE_MASK;
+    auto Top = FEXCore::AlignUp(Start + Length, FHU::FEX_PAGE_SIZE);
+
+    {
+      FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, true);
+
+      // find the first Mapping after the Range ends, or ::end()
+      auto Mapping = MemoryMaps.lower_bound(Top);
+
+      while (Mapping != MemoryMaps.begin()) {
+        Mapping--;
+
+        auto MapBase = Mapping->first;
+        auto MapTop = MapBase + Mapping->second.Length;
+
+        uint64_t ProtectBase = 0;
+        uint64_t ProtectSize = 0;
+
+        if (MapTop <= Base) {
+          // Mapping ends before the Range start, exit
+          break;
+        } else if (MapBase <= Base && MapTop <= Top) {
+          // Mapping starts before or at Range & ends at or before Range
+          // Base to MapTop
+          ProtectBase = Base;
+          ProtectSize = MapTop - Base;
+        } else if (MapBase <= Base && MapTop > Top) {
+          // Mapping starts before or at Range & ends after Range
+          // Base to Top
+          ProtectBase = Base;
+          ProtectSize = Top - Base;
+        } else if (MapBase >= Base && MapTop <= Top) {
+          // Mapping is included or equal to Range
+          // MapBase to MapTop
+          ProtectBase = MapBase;
+          ProtectSize = MapTop - MapBase;
+        } else if (MapBase >= Base && MapTop > Top) {
+          // Mapping starts after or at Range && ends after Range
+          // MapBase to Top
+          ProtectBase = MapBase;
+          ProtectSize = Top - MapBase;
+        } else {
+          ERROR_AND_DIE_FMT("Invalid Case");
+        }
+
+        int rv = mprotect((void*)ProtectBase, ProtectSize, PROT_READ);
+
+        LogMan::Throw::AFmt(rv == 0, "mprotect({}, {}) failed", ProtectBase, ProtectSize);
+      }
+    }
+  }
+
   void Context::ClearCodeCache(FEXCore::Core::InternalThreadState *Thread, bool AlsoClearIRCache) {
+    std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
+
     Thread->LookupCache->ClearCache();
     Thread->CPUBackend->ClearCache();
     if (Thread->CompileService) {
@@ -857,6 +959,7 @@ namespace FEXCore::Context {
     uint64_t StartAddr {};
     uint64_t Length {};
 
+    std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
     // Do we already have this in the IR cache?
     auto LocalEntry = Thread->LocalIRCache.find(GuestRIP);
 
@@ -907,6 +1010,11 @@ namespace FEXCore::Context {
     if (IRList == nullptr) {
       return {};
     }
+
+    if (Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MTRACK) {
+      SMCMarkReadOnly(GuestRIP, Length);
+    }
+
     // Attempt to get the CPU backend to compile this code
     return {
       .CompiledCode = Thread->CPUBackend->CompileCode(GuestRIP, IRList, DebugData, RAData),
@@ -1077,7 +1185,11 @@ namespace FEXCore::Context {
 
   void FlushCodeRange(FEXCore::Core::InternalThreadState *Thread, uint64_t Start, uint64_t Length) {
 
-    if (Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MMAN) {
+    if (Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MMAN || 
+        Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MTRACK) {
+      
+      std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
+
       auto lower = Thread->LookupCache->CodePages.lower_bound(Start >> 12);
       auto upper = Thread->LookupCache->CodePages.upper_bound((Start + Length) >> 12);
 
@@ -1090,6 +1202,8 @@ namespace FEXCore::Context {
   }
 
   void Context::RemoveCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
+    std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
+
     Thread->LocalIRCache.erase(GuestRIP);
     Thread->LookupCache->Erase(GuestRIP);
   }
@@ -1117,6 +1231,7 @@ namespace FEXCore::Context {
   }
 
   bool Context::GetDebugDataForRIP(uint64_t RIP, FEXCore::Core::DebugData *Data) {
+    std::lock_guard<std::recursive_mutex> lk(ParentThread->LookupCache->WriteLock);
     auto it = ParentThread->LocalIRCache.find(RIP);
     if (it == ParentThread->LocalIRCache.end()) {
       return false;
@@ -1154,6 +1269,86 @@ namespace FEXCore::Context {
     if (DebugServer) {
       DebugServer->AlertLibrariesChanged();
     }
+  }
+
+  static void ClearMemoryInternal(std::map<uint64_t, Context::MemoryEntry> &MemoryMaps, uintptr_t Base, uintptr_t Size) {
+    auto Top = Base + Size;
+
+    // find the first Mapping after the Range ends, or ::end()
+    auto Mapping = MemoryMaps.lower_bound(Top);
+
+    // Iterate backwards all mappings
+    while (Mapping != MemoryMaps.begin()) {
+      Mapping--;
+
+      auto MapBase = Mapping->first;
+      auto MapTop = MapBase + Mapping->second.Length;
+
+      if (MapTop <= Base) {
+        // Mapping ends before the Range start, exit
+        break;
+      } else if (MapBase < Base && MapTop <= Top) {
+        // Mapping starts before Range & ends at or before Range, trim end
+        Mapping->second.Length = Base - MapBase;
+      } else if (MapBase < Base && MapTop > Top) {
+        // Mapping starts before Range & ends after Range, split
+
+        // trim first half
+        Mapping->second.Length = Base - MapBase;
+
+        // insert second half
+        MemoryMaps.emplace(Top, Context::MemoryEntry{ MapTop - Top, Mapping->second.Writable });
+      } else if (MapBase >= Base && MapTop <= Top) {
+        // Mapping is included or equal to Range, delete
+        // returns next element, so -- is safe at loop
+        Mapping = MemoryMaps.erase(Mapping);
+      } else if (MapBase >= Base && MapTop > Top) {
+        // Mapping starts after or at Range && ends after Range, trim start
+
+        // insert second half
+        MemoryMaps.emplace(Top, Context::MemoryEntry{ MapTop - Top, Mapping->second.Writable });
+
+        // erase original
+        // returns next element, so -- is safe at loop
+        Mapping = MemoryMaps.erase(Mapping);
+      } else {
+        ERROR_AND_DIE_FMT("Invalid Case");
+      }
+    }
+  }
+
+  void Context::SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable) {
+    Size = FEXCore::AlignUp(Size + (Base & ~FHU::FEX_PAGE_MASK), FHU::FEX_PAGE_SIZE);
+    Base = Base & FHU::FEX_PAGE_MASK;
+    
+    {
+      FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, false);
+
+      // remove previous mappings
+      ClearMemoryInternal(MemoryMaps, Base, Size);
+
+      // Insert new mapping
+      MemoryMaps.emplace(Base, MemoryEntry{ Size, Writable });
+    }
+
+  }
+
+  void Context::ClearMemoryMap(uintptr_t Base, uintptr_t Size) {
+    Size = FEXCore::AlignUp(Size + (Base & ~FHU::FEX_PAGE_MASK), FHU::FEX_PAGE_SIZE);
+    Base = Base & FHU::FEX_PAGE_MASK;
+
+    {
+      FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, false);
+      ClearMemoryInternal(MemoryMaps, Base, Size);
+    }
+  }
+
+  void Context::LockBeforeFork() {
+    MemoryEntryMutex.lock_shared();
+  }
+
+  void Context::UnlockAfterFork() {
+    MemoryEntryMutex.unlock_shared();
   }
 
   void ConfigureAOTGen(FEXCore::Core::InternalThreadState *Thread, std::set<uint64_t> *ExternalBranches, uint64_t SectionMaxAddress) {

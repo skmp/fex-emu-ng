@@ -176,6 +176,9 @@ namespace FEX::HLE {
     auto Mutex = FEX::HLE::_SyscallHandler->FM.GetFDLock();
     Mutex->lock();
 
+    // also for core
+    FEXCore::Context::LockBeforeFork(Thread->CTX);
+
     pid_t Result{};
     if (flags & CLONE_VFORK) {
       // XXX: We don't currently support a vfork as it causes problems.
@@ -187,6 +190,7 @@ namespace FEX::HLE {
     }
 
     // Unlock the mutex on both sides of the fork
+    FEXCore::Context::UnlockAfterFork(Thread->CTX);
     Mutex->unlock();
 
     if (Result == 0) {

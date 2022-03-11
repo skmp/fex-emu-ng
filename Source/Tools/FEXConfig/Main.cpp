@@ -536,6 +536,8 @@ namespace {
         } else if (**Value == "1") {
           SMCChecks = FEXCore::Config::CONFIG_SMC_MMAN;
         } else if (**Value == "2") {
+          SMCChecks = FEXCore::Config::CONFIG_SMC_MTRACK;
+        } else if (**Value == "3") {
           SMCChecks = FEXCore::Config::CONFIG_SMC_FULL;
         }
       }
@@ -543,6 +545,7 @@ namespace {
       bool SMCChanged = false;
       SMCChanged |= ImGui::RadioButton("None", &SMCChecks, FEXCore::Config::CONFIG_SMC_NONE); ImGui::SameLine();
       SMCChanged |= ImGui::RadioButton("MMan", &SMCChecks, FEXCore::Config::CONFIG_SMC_MMAN); ImGui::SameLine();
+      SMCChanged |= ImGui::RadioButton("MTrack", &SMCChecks, FEXCore::Config::CONFIG_SMC_MTRACK); ImGui::SameLine();
       SMCChanged |= ImGui::RadioButton("Full", &SMCChecks, FEXCore::Config::CONFIG_SMC_FULL);
 
       if (SMCChanged) {

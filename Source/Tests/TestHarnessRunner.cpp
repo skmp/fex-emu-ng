@@ -147,10 +147,18 @@ int main(int argc, char **argv, char **const envp) {
   std::unique_ptr<FEX::HLE::MemAllocator> Allocator;
 
   if (Loader.Is64BitMode()) {
-    if (!Loader.MapMemory([](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-      return FEXCore::Allocator::mmap(addr, length, prot, flags, fd, offset);
-    }, [](void *addr, size_t length) {
-      return FEXCore::Allocator::munmap(addr, length);
+    if (!Loader.MapMemory([CTX](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+      auto rv = FEXCore::Allocator::mmap(addr, length, prot, flags, fd, offset);
+      if (rv != MAP_FAILED) {
+        FEXCore::Context::SetMemoryMap(CTX, (uintptr_t)rv, length, prot & PROT_WRITE);
+      }
+      return rv;
+    }, [CTX](void *addr, size_t length) {
+      auto rv = FEXCore::Allocator::munmap(addr, length);
+      if (rv == 0) {
+        FEXCore::Context::ClearMemoryMap(CTX, (uintptr_t)addr, length);
+      }
+      return rv;
     })) {
       // failed to map
       return -ENOEXEC;
@@ -169,10 +177,18 @@ int main(int argc, char **argv, char **const envp) {
       Allocator = FEX::HLE::CreatePassthroughAllocator();
     }
 
-    if (!Loader.MapMemory([&Allocator](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-      return Allocator->mmap(addr, length, prot, flags, fd, offset);
-    }, [&Allocator](void *addr, size_t length) {
-      return Allocator->munmap(addr, length);
+    if (!Loader.MapMemory([CTX](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+      auto rv = FEXCore::Allocator::mmap(addr, length, prot, flags, fd, offset);
+      if (rv != MAP_FAILED) {
+        FEXCore::Context::SetMemoryMap(CTX, (uintptr_t)rv, length, prot & PROT_WRITE);
+      }
+      return rv;
+    }, [CTX](void *addr, size_t length) {
+      auto rv = FEXCore::Allocator::munmap(addr, length);
+      if (rv == 0) {
+        FEXCore::Context::ClearMemoryMap(CTX, (uintptr_t)addr, length);
+      }
+      return rv;
     })) {
       // failed to map
       LogMan::Msg::EFmt("Failed to map 32-bit elf file.");

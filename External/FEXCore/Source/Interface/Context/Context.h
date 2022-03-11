@@ -269,8 +269,21 @@ namespace FEXCore::Context {
 
     uint8_t GetGPRSize() const { return Config.Is64BitMode ? 8 : 4; }
 
+    std::shared_mutex MemoryEntryMutex{};
+    struct MemoryEntry {
+      uint64_t Length;
+      bool Writable;
+    };
+
     void AddNamedRegion(uintptr_t Base, uintptr_t Size, uintptr_t Offset, const std::string &filename);
     void RemoveNamedRegion(uintptr_t Base, uintptr_t Size);
+
+    std::map<uint64_t, MemoryEntry> MemoryMaps;
+    void SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable);
+    void ClearMemoryMap(uintptr_t Base, uintptr_t Size);
+
+    void LockBeforeFork();
+    void UnlockAfterFork();
 
     FEXCore::JITSymbols Symbols;
 
@@ -315,6 +328,9 @@ namespace FEXCore::Context {
     void NotifyPause();
 
     void AddBlockMapping(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, void *Ptr, uint64_t Start, uint64_t Length);
+    void SMCMarkReadOnly(uint64_t Start, uint64_t Length);
+    static bool HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext);
+    
     FEXCore::CodeLoader *LocalLoader{};
 
     // Entry Cache

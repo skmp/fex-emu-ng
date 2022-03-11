@@ -322,16 +322,27 @@ int main(int argc, char **argv, char **const envp) {
   FEXCore::Config::Set(FEXCore::Config::CONFIG_APP_FILENAME, std::filesystem::canonical(Program).string());
   FEXCore::Config::Set(FEXCore::Config::CONFIG_IS64BIT_MODE, Loader.Is64BitMode() ? "1" : "0");
 
+  auto CTX = FEXCore::Context::CreateNewContext();
+  FEXCore::Context::InitializeContext(CTX);
+
   std::unique_ptr<FEX::HLE::MemAllocator> Allocator;
   FEXCore::Allocator::PtrCache *Base48Bit{};
 
   if (Loader.Is64BitMode()) {
     // Destroy the 48th bit if it exists
     Base48Bit = FEXCore::Allocator::Steal48BitVA();
-    if (!Loader.MapMemory([](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-      return FEXCore::Allocator::mmap(addr, length, prot, flags, fd, offset);
-    }, [](void *addr, size_t length) {
-      return FEXCore::Allocator::munmap(addr, length);
+    if (!Loader.MapMemory([CTX](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+      auto rv = FEXCore::Allocator::mmap(addr, length, prot, flags, fd, offset);
+      if (rv != MAP_FAILED) {
+        FEXCore::Context::SetMemoryMap(CTX, (uintptr_t)rv, length, prot & PROT_WRITE);
+      }
+      return rv;
+    }, [CTX](void *addr, size_t length) {
+      auto rv = FEXCore::Allocator::munmap(addr, length);
+      if (rv == 0) {
+        FEXCore::Context::ClearMemoryMap(CTX, (uintptr_t)addr, length);
+      }
+      return rv;
     })) {
       // failed to map
       LogMan::Msg::EFmt("Failed to map 64-bit elf file.");
@@ -356,10 +367,22 @@ int main(int argc, char **argv, char **const envp) {
       Allocator = FEX::HLE::CreatePassthroughAllocator();
     }
 
-    if (!Loader.MapMemory([&Allocator](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-      return Allocator->mmap(addr, length, prot, flags, fd, offset);
-    }, [&Allocator](void *addr, size_t length) {
-      return Allocator->munmap(addr, length);
+    if (!Loader.MapMemory([CTX, &Allocator](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+      auto rv = Allocator->mmap(addr, length, prot, flags, fd, offset);
+      if (rv >= (void*)-4096) {
+        return MAP_FAILED;
+      } else {
+        FEXCore::Context::SetMemoryMap(CTX, (uintptr_t)rv, length, prot & PROT_WRITE);
+        return rv;
+      }
+    }, [CTX, &Allocator](void *addr, size_t length) {
+      auto rv = Allocator->munmap(addr, length);
+      if (rv == 0) {
+        FEXCore::Context::ClearMemoryMap(CTX, (uintptr_t)addr, length);
+        return 0;
+      } else {
+        return -1;
+      }
     })) {
       // failed to map
       LogMan::Msg::EFmt("Failed to map 32-bit elf file.");
@@ -369,9 +392,6 @@ int main(int argc, char **argv, char **const envp) {
 
   // System allocator is now system allocator or FEX
   FEXCore::Context::InitializeStaticTables(Loader.Is64BitMode() ? FEXCore::Context::MODE_64BIT : FEXCore::Context::MODE_32BIT);
-
-  auto CTX = FEXCore::Context::CreateNewContext();
-  FEXCore::Context::InitializeContext(CTX);
 
   auto SignalDelegation = std::make_unique<FEX::HLE::SignalDelegator>();
 

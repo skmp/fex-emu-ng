@@ -231,6 +231,8 @@ namespace FEXCore::Context {
   FEX_DEFAULT_VISIBILITY void StopThread(FEXCore::Context::Context *CTX, FEXCore::Core::InternalThreadState *Thread);
   FEX_DEFAULT_VISIBILITY void DestroyThread(FEXCore::Context::Context *CTX, FEXCore::Core::InternalThreadState *Thread);
   FEX_DEFAULT_VISIBILITY void CleanupAfterFork(FEXCore::Context::Context *CTX, FEXCore::Core::InternalThreadState *Thread);
+  FEX_DEFAULT_VISIBILITY void LockBeforeFork(FEXCore::Context::Context *CTX);
+  FEX_DEFAULT_VISIBILITY void UnlockAfterFork(FEXCore::Context::Context *CTX);
   FEX_DEFAULT_VISIBILITY void SetSignalDelegator(FEXCore::Context::Context *CTX, FEXCore::SignalDelegator *SignalDelegation);
   FEX_DEFAULT_VISIBILITY void SetSyscallHandler(FEXCore::Context::Context *CTX, FEXCore::HLE::SyscallHandler *Handler);
   FEX_DEFAULT_VISIBILITY FEXCore::CPUID::FunctionResults RunCPUIDFunction(FEXCore::Context::Context *CTX, uint32_t Function, uint32_t Leaf);
@@ -238,6 +240,10 @@ namespace FEXCore::Context {
 
   FEX_DEFAULT_VISIBILITY void AddNamedRegion(FEXCore::Context::Context *CTX, uintptr_t Base, uintptr_t Length, uintptr_t Offset, const std::string& Name);
   FEX_DEFAULT_VISIBILITY void RemoveNamedRegion(FEXCore::Context::Context *CTX, uintptr_t Base, uintptr_t Length);
+
+  FEX_DEFAULT_VISIBILITY void SetMemoryMap(FEXCore::Context::Context *CTX, uintptr_t Base, uintptr_t Length, bool Writable);
+  FEX_DEFAULT_VISIBILITY void ClearMemoryMap(FEXCore::Context::Context *CTX, uintptr_t Base, uintptr_t Length);
+
   FEX_DEFAULT_VISIBILITY void SetAOTIRLoader(FEXCore::Context::Context *CTX, std::function<int(const std::string&)> CacheReader);
   FEX_DEFAULT_VISIBILITY void SetAOTIRWriter(FEXCore::Context::Context *CTX, std::function<std::unique_ptr<std::ofstream>(const std::string&)> CacheWriter);
   FEX_DEFAULT_VISIBILITY void SetAOTIRRenamer(FEXCore::Context::Context *CTX, std::function<void(const std::string&)> CacheRenamer);

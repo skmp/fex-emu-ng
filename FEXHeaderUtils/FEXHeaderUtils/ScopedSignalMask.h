@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <mutex>
+#include <shared_mutex>
 #include <signal.h>
 #include <sys/syscall.h>
 #include <unistd.h>
@@ -42,5 +43,37 @@ namespace FHU {
     private:
       uint64_t OriginalMask{};
       std::mutex &Mutex;
+  };
+
+  class ScopedSignalMaskWithSharedMutex final {
+    public:
+      ScopedSignalMaskWithSharedMutex(std::shared_mutex &_Mutex, bool _Shared, uint64_t Mask = ~0ULL)
+        : Mutex {_Mutex}, Shared(_Shared) {
+        // Mask all signals, storing the original incoming mask
+        ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &Mask, &OriginalMask, sizeof(OriginalMask));
+
+        // Lock the mutex
+        if (Shared) {
+          Mutex.lock_shared();
+        } else {
+          Mutex.lock();
+        }
+      }
+
+      ~ScopedSignalMaskWithSharedMutex() {
+        // Unlock the mutex
+        if (Shared) {
+          Mutex.unlock_shared();
+        } else {
+          Mutex.unlock();
+        }
+
+        // Unmask back to the original signal mask
+        ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &OriginalMask, nullptr, sizeof(OriginalMask));
+      }
+    private:
+      std::shared_mutex &Mutex;
+      uint64_t OriginalMask{};
+      bool Shared;
   };
 }
