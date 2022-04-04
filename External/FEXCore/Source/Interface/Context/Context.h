@@ -278,6 +278,7 @@ namespace FEXCore::Context {
     void AddNamedRegion(uintptr_t Base, uintptr_t Size, uintptr_t Offset, const std::string &filename);
     void RemoveNamedRegion(uintptr_t Base, uintptr_t Size);
 
+    // Tracks Base Address of maps, Page aligned
     std::map<uint64_t, MemoryEntry> MemoryMaps;
     void SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable);
     void ClearMemoryMap(uintptr_t Base, uintptr_t Size);
@@ -328,6 +329,7 @@ namespace FEXCore::Context {
     void NotifyPause();
 
     void AddBlockMapping(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, void *Ptr, uint64_t Start, uint64_t Length);
+    // Marks known mapped areas of a memory range as PROT_READ
     void SMCMarkReadOnly(uint64_t Start, uint64_t Length);
     static bool HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext);
     

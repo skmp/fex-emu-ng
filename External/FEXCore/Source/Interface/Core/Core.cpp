@@ -202,6 +202,9 @@ namespace FEXCore::Context {
     {
       FHU::ScopedSignalMaskWithSharedMutex lk(CTX->MemoryEntryMutex, true);
 
+      // Get the one after FaultAddress, or end
+      // FaultAddress is inclusive
+      // If the write spans two pages, they will be flushed one at a time (generating two faults)
       auto Entry = CTX->MemoryMaps.upper_bound(FaultAddress);
 
       if (Entry != CTX->MemoryMaps.begin()) {
@@ -684,20 +687,21 @@ namespace FEXCore::Context {
   }
 
   void Context::SMCMarkReadOnly(uint64_t Start, uint64_t Length) {
-    auto Base = Start & FHU::FEX_PAGE_MASK;
-    auto Top = FEXCore::AlignUp(Start + Length, FHU::FEX_PAGE_SIZE);
+    const auto Base = Start & FHU::FEX_PAGE_MASK;
+    const auto Top = FEXCore::AlignUp(Start + Length, FHU::FEX_PAGE_SIZE);
 
     {
       FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, true);
 
-      // find the first Mapping after the Range ends, or ::end()
+      // find the first Mapping at or after the Range ends, or ::end()
+      // Top is the first value after the end mapping
       auto Mapping = MemoryMaps.lower_bound(Top);
 
       while (Mapping != MemoryMaps.begin()) {
         Mapping--;
 
-        auto MapBase = Mapping->first;
-        auto MapTop = MapBase + Mapping->second.Length;
+        const auto MapBase = Mapping->first;
+        const auto MapTop = MapBase + Mapping->second.Length;
 
         uint64_t ProtectBase = 0;
         uint64_t ProtectSize = 0;
@@ -1272,17 +1276,18 @@ namespace FEXCore::Context {
   }
 
   static void ClearMemoryInternal(std::map<uint64_t, Context::MemoryEntry> &MemoryMaps, uintptr_t Base, uintptr_t Size) {
-    auto Top = Base + Size;
+    const auto Top = Base + Size;
 
-    // find the first Mapping after the Range ends, or ::end()
+    // find the first Mapping at or after the Range ends, or ::end()
+    // Top is the first value after the end mapping
     auto Mapping = MemoryMaps.lower_bound(Top);
 
     // Iterate backwards all mappings
     while (Mapping != MemoryMaps.begin()) {
       Mapping--;
 
-      auto MapBase = Mapping->first;
-      auto MapTop = MapBase + Mapping->second.Length;
+      const auto MapBase = Mapping->first;
+      const auto MapTop = MapBase + Mapping->second.Length;
 
       if (MapTop <= Base) {
         // Mapping ends before the Range start, exit
