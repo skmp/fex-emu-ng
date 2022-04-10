@@ -21,6 +21,8 @@ namespace FHU {
    * Destructor Order:
    * 1) Unlock Mutex
    * 2) Unmask signals
+   *
+   * Masking signals around mutex locks is needed for signal-rentrant safety
    */
   class ScopedSignalMaskWithMutex final {
     public:
@@ -45,6 +47,19 @@ namespace FHU {
       std::mutex &Mutex;
   };
 
+  /**
+   * @brief A class that masks signals and locks a shared mutex until it goes out of scope
+   *
+   * Constructor order:
+   * 1) Mask signals
+   * 2) Lock Mutex
+   *
+   * Destructor Order:
+   * 1) Unlock Mutex
+   * 2) Unmask signals
+   *
+   * Masking signals around mutex locks is needed for signal-rentrant safety
+   */
   class ScopedSignalMaskWithSharedMutex final {
     public:
       ScopedSignalMaskWithSharedMutex(std::shared_mutex &_Mutex, bool _Shared, uint64_t Mask = ~0ULL)
