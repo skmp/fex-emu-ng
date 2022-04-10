@@ -534,11 +534,11 @@ namespace {
         if (**Value == "0") {
           SMCChecks = FEXCore::Config::CONFIG_SMC_NONE;
         } else if (**Value == "1") {
-          SMCChecks = FEXCore::Config::CONFIG_SMC_MMAN;
-        } else if (**Value == "2") {
           SMCChecks = FEXCore::Config::CONFIG_SMC_MTRACK;
-        } else if (**Value == "3") {
+        } else if (**Value == "2") {
           SMCChecks = FEXCore::Config::CONFIG_SMC_FULL;
+        } else if (**Value == "3") {
+          SMCChecks = FEXCore::Config::CONFIG_SMC_MMAN;
         }
       }
 

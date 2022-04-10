@@ -27,11 +27,11 @@ namespace Handler {
   static inline std::string_view SMCCheckHandler(std::string_view Value) {
     if (Value == "none")
       return "0";
-    else if (Value == "mman")
-      return "1";
     else if (Value == "mtrack")
-      return "2";
+      return "1";
     else if (Value == "full")
+      return "2";
+    else if (Value == "mman")
       return "3";
     return "0";
   }
@@ -50,9 +50,9 @@ namespace Handler {
 
   enum ConfigSMCChecks {
     CONFIG_SMC_NONE,
-    CONFIG_SMC_MMAN,
     CONFIG_SMC_MTRACK,
     CONFIG_SMC_FULL,
+    CONFIG_SMC_MMAN,
   };
 
   enum class LayerType {
