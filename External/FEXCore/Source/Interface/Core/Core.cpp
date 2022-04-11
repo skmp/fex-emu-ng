@@ -693,7 +693,7 @@ namespace FEXCore::Context {
     {
       FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, true);
 
-      // find the first Mapping at or after the Range ends, or ::end()
+      // Find the first mapping at or after the range ends, or ::end().
       // Top is the first value after the end mapping
       auto Mapping = MemoryMaps.lower_bound(Top);
 
