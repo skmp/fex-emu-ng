@@ -218,7 +218,8 @@ namespace FEXCore::Context {
       }
     }
 
-    // Do FlushCodeRange outside MemoryEntryMutex lock to avoid CompileCode deadlock
+    // Perform the actual FlushCodeRange if an overlapping mapping was found.
+    // Note that this is done outside of the MemoryEntryMutex lock to avoid deadlocking in CompileCode
     if (DoFlush) {
       std::lock_guard<std::mutex> lk(CTX->ThreadCreationMutex);
       // Mark as read write before flush, so that if code is compiled after the Flush but before returning, the segfault will be re-raised
