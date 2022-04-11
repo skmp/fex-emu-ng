@@ -278,7 +278,7 @@ namespace FEXCore::Context {
     void AddNamedRegion(uintptr_t Base, uintptr_t Size, uintptr_t Offset, const std::string &filename);
     void RemoveNamedRegion(uintptr_t Base, uintptr_t Size);
 
-    // Tracks Base Address of maps, Page aligned
+    // Memory ranges indexed by page aligned starting address
     std::map<uint64_t, MemoryEntry> MemoryMaps;
     void SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable);
     void ClearMemoryMap(uintptr_t Base, uintptr_t Size);
