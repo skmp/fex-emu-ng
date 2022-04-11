@@ -22,7 +22,7 @@ namespace FHU {
    * 1) Unlock Mutex
    * 2) Unmask signals
    *
-   * Masking signals around mutex locks is needed for signal-rentrant safety
+   * Masking signals around mutex locks is needed for signal-reentrant safety
    */
   class ScopedSignalMaskWithMutex final {
     public:
