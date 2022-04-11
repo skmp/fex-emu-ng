@@ -32,6 +32,8 @@ namespace FEX::HLE::x32 {
 
       auto Thread = Frame->Thread;
       if (!FEX::HLE::HasSyscallError(Result)) {
+        FEXCore::Context::SetMemoryMap(Thread->CTX, Result, length, prot & PROT_WRITE);
+
         if (!(flags & MAP_ANONYMOUS)) {
           auto filename = get_fdpath(fd);
 
@@ -48,6 +50,8 @@ namespace FEX::HLE::x32 {
 
       auto Thread = Frame->Thread;
       if (!FEX::HLE::HasSyscallError(Result)) {
+        FEXCore::Context::SetMemoryMap(Thread->CTX, Result, length, prot & PROT_WRITE);
+
         if (!(flags & MAP_ANONYMOUS)) {
           auto filename = get_fdpath(fd);
 
@@ -64,6 +68,7 @@ namespace FEX::HLE::x32 {
         munmap(addr, length);
 
       if (Result == 0) {
+        FEXCore::Context::ClearMemoryMap(Frame->Thread->CTX, (uintptr_t)addr, length);
         FEXCore::Context::RemoveNamedRegion(Frame->Thread->CTX, (uintptr_t)addr, length);
         FEXCore::Context::FlushCodeRange(Frame->Thread, (uintptr_t)addr, length);
       }
@@ -73,6 +78,9 @@ namespace FEX::HLE::x32 {
 
     REGISTER_SYSCALL_IMPL_X32(mprotect, [](FEXCore::Core::CpuStateFrame *Frame, void *addr, uint32_t len, int prot) -> uint64_t {
       uint64_t Result = ::mprotect(addr, len, prot);
+      if (Result != -1) {
+        FEXCore::Context::SetMemoryMap(Frame->Thread->CTX, (uintptr_t)addr, len, prot & PROT_WRITE);
+      }
       if (Result != -1 && prot & PROT_EXEC) {
         FEXCore::Context::FlushCodeRange(Frame->Thread, (uintptr_t)addr, len);
       }
