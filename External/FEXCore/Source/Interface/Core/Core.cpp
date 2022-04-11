@@ -1314,7 +1314,7 @@ namespace FEXCore::Context {
         MemoryMaps.emplace(Top, Context::MemoryEntry{ MapTop - Top, Mapping->second.Writable });
 
         // erase original
-        // returns next element, so -- is safe at loop
+        // returns next element, so it can be decremented safely in the next loop iteration
         Mapping = MemoryMaps.erase(Mapping);
       } else {
         ERROR_AND_DIE_FMT("Invalid Case");
