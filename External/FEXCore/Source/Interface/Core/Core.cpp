@@ -202,7 +202,7 @@ namespace FEXCore::Context {
     {
       FHU::ScopedSignalMaskWithSharedMutex lk(CTX->MemoryEntryMutex, true);
 
-      // Get the one after FaultAddress, or end
+      // Get the first mapping after FaultAddress, or end
       // FaultAddress is inclusive
       // If the write spans two pages, they will be flushed one at a time (generating two faults)
       auto Entry = CTX->MemoryMaps.upper_bound(FaultAddress);
