@@ -53,6 +53,7 @@ namespace FEXCore::HLE {
 
     SyscallOSABI GetOSABI() const { return OSABI; }
     virtual FEXCore::CodeLoader *GetCodeLoader() const { return nullptr; }
+    virtual void MarkGuestExecutableRange(uint64_t Start, uint64_t Length) { }
 
   protected:
     SyscallOSABI OSABI;

@@ -48,7 +48,7 @@ namespace FHU {
   };
 
   /**
-   * @brief A class that masks signals and locks a shared mutex until it goes out of scope
+   * @brief A class that masks signals and shared locks a shared mutex until it goes out of scope
    *
    * Constructor order:
    * 1) Mask signals
@@ -60,35 +60,63 @@ namespace FHU {
    *
    * Masking signals around mutex locks is needed for signal-rentrant safety
    */
-  class ScopedSignalMaskWithSharedMutex final {
+  class ScopedSignalMaskWithSharedLock final {
     public:
-      ScopedSignalMaskWithSharedMutex(std::shared_mutex &_Mutex, bool _Shared, uint64_t Mask = ~0ULL)
-        : Mutex {_Mutex}, Shared(_Shared) {
+      inline ScopedSignalMaskWithSharedLock(std::shared_mutex &_Mutex, uint64_t Mask = ~0ULL)
+        : Mutex {_Mutex} {
         // Mask all signals, storing the original incoming mask
         ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &Mask, &OriginalMask, sizeof(OriginalMask));
 
         // Lock the mutex
-        if (Shared) {
           Mutex.lock_shared();
-        } else {
-          Mutex.lock();
-        }
       }
 
-      ~ScopedSignalMaskWithSharedMutex() {
+      inline ~ScopedSignalMaskWithSharedLock() {
         // Unlock the mutex
-        if (Shared) {
           Mutex.unlock_shared();
-        } else {
-          Mutex.unlock();
-        }
-
+        
         // Unmask back to the original signal mask
         ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &OriginalMask, nullptr, sizeof(OriginalMask));
       }
     private:
       std::shared_mutex &Mutex;
       uint64_t OriginalMask{};
-      bool Shared;
+  };
+
+
+  /**
+   * @brief A class that masks signals and unique locks a shared mutex until it goes out of scope
+   *
+   * Constructor order:
+   * 1) Mask signals
+   * 2) Lock Mutex
+   *
+   * Destructor Order:
+   * 1) Unlock Mutex
+   * 2) Unmask signals
+   *
+   * Masking signals around mutex locks is needed for signal-rentrant safety
+   */
+  class ScopedSignalMaskWithUniqueLock final {
+    public:
+      inline ScopedSignalMaskWithUniqueLock(std::shared_mutex &_Mutex, uint64_t Mask = ~0ULL)
+        : Mutex {_Mutex} {
+        // Mask all signals, storing the original incoming mask
+        ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &Mask, &OriginalMask, sizeof(OriginalMask));
+
+        // Lock the mutex
+          Mutex.lock_shared();
+      }
+
+      inline ~ScopedSignalMaskWithUniqueLock() {
+        // Unlock the mutex
+          Mutex.unlock_shared();
+        
+        // Unmask back to the original signal mask
+        ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &OriginalMask, nullptr, sizeof(OriginalMask));
+      }
+    private:
+      std::shared_mutex &Mutex;
+      uint64_t OriginalMask{};
   };
 }

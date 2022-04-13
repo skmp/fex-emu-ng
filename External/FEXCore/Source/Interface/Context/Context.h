@@ -155,11 +155,13 @@ namespace FEXCore::Context {
     void RegisterHostSignalHandler(int Signal, HostSignalDelegatorFunction Func, bool Required);
     void RegisterFrontendHostSignalHandler(int Signal, HostSignalDelegatorFunction Func, bool Required);
 
-    static void RemoveCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP);
+    // Must be called from owning thread
+    static void RemoveThreadCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP);
 
     // Wrapper which takes CpuStateFrame instead of InternalThreadState
-    static void RemoveCodeEntryFromJit(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP) {
-      RemoveCodeEntry(Frame->Thread, GuestRIP);
+    // Must be called from owning thread
+    static void RemoveThreadCodeEntryFromJit(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP) {
+      RemoveThreadCodeEntry(Frame->Thread, GuestRIP);
     }
 
     // Debugger interface
@@ -269,22 +271,8 @@ namespace FEXCore::Context {
 
     uint8_t GetGPRSize() const { return Config.Is64BitMode ? 8 : 4; }
 
-    std::shared_mutex MemoryEntryMutex{};
-    struct MemoryEntry {
-      uint64_t Length;
-      bool Writable;
-    };
-
     void AddNamedRegion(uintptr_t Base, uintptr_t Size, uintptr_t Offset, const std::string &filename);
     void RemoveNamedRegion(uintptr_t Base, uintptr_t Size);
-
-    // Memory ranges indexed by page aligned starting address
-    std::map<uint64_t, MemoryEntry> MemoryMaps;
-    void SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable);
-    void ClearMemoryMap(uintptr_t Base, uintptr_t Size);
-
-    void LockBeforeFork();
-    void UnlockAfterFork();
 
     FEXCore::JITSymbols Symbols;
 
@@ -329,9 +317,6 @@ namespace FEXCore::Context {
     void NotifyPause();
 
     void AddBlockMapping(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, void *Ptr, uint64_t Start, uint64_t Length);
-    // Marks known mapped areas of a memory range as PROT_READ
-    void SMCMarkReadOnly(uint64_t Start, uint64_t Length);
-    static bool HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext);
     
     FEXCore::CodeLoader *LocalLoader{};
 

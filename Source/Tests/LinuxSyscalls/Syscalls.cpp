@@ -27,6 +27,9 @@ $end_info$
 #include <FEXCore/Utils/MathUtils.h>
 #include <FEXCore/Utils/Threads.h>
 #include <FEXHeaderUtils/Syscalls.h>
+#include <FEXHeaderUtils/ScopedSignalMask.h>
+#include <FEXHeaderUtils/TypeDefines.h>
+#include <Tests/LinuxSyscalls/SignalDelegator.h>
 
 #include <algorithm>
 #include <alloca.h>
@@ -529,8 +532,11 @@ uint64_t SyscallHandler::HandleBRK(FEXCore::Core::CpuStateFrame *Frame, void *Ad
 
         uint64_t RemainingSize = DataSpaceMaxSize - NewSizeAligned;
         // We have pages we can unmap
-        FEXCore::Allocator::munmap(reinterpret_cast<void*>(DataSpace + NewSizeAligned), RemainingSize);
-        FEXCore::Context::ClearMemoryMap(Frame->Thread->CTX, DataSpace + NewSizeAligned, RemainingSize);
+        int ok = FEXCore::Allocator::munmap(reinterpret_cast<void*>(DataSpace + NewSizeAligned), RemainingSize);
+        if (ok != -1) {
+          TrackMunmap(Frame->Thread->CTX, DataSpace + NewSizeAligned, RemainingSize);
+        }
+        
         DataSpaceMaxSize = NewSizeAligned;
       }
       else if (NewSize > DataSpaceMaxSize) {
@@ -552,7 +558,7 @@ uint64_t SyscallHandler::HandleBRK(FEXCore::Core::CpuStateFrame *Frame, void *Ad
         }
 
         if (NewBRK != ~0ULL) {
-          FEXCore::Context::SetMemoryMap(Frame->Thread->CTX, NewBRK, AllocateNewSize, 1);
+          TrackMmap(Frame->Thread->CTX, NewBRK, AllocateNewSize, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
         }
 
         if (NewBRK != ~0ULL && NewBRK != (DataSpace + DataSpaceMaxSize)) {
@@ -598,6 +604,10 @@ SyscallHandler::SyscallHandler(FEXCore::Context::Context *ctx, FEX::HLE::SignalD
   HostKernelVersion = CalculateHostKernelVersion();
   GuestKernelVersion = CalculateGuestKernelVersion();
   Alloc32Handler = FEX::HLE::Create32BitAllocator();
+
+  if (SMCChecks == FEXCore::Config::CONFIG_SMC_MTRACK) {
+    SignalDelegation->RegisterHostSignalHandler(SIGSEGV, HandleSegfault, true);
+  }
 }
 
 SyscallHandler::~SyscallHandler() {
@@ -679,6 +689,204 @@ uint64_t UnimplementedSyscall(FEXCore::Core::CpuStateFrame *Frame, uint64_t Sysc
 
 uint64_t UnimplementedSyscallSafe(FEXCore::Core::CpuStateFrame *Frame, uint64_t SyscallNumber) {
   return -ENOSYS;
+}
+
+
+//// VMA Tracking ////
+static std::string get_fdpath(int fd)
+{
+      std::error_code ec;
+      return std::filesystem::canonical(std::filesystem::path("/proc/self/fd") / std::to_string(fd), ec).string();
+}
+
+bool SyscallHandler::HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext) {
+  auto CTX = Thread->CTX;
+
+  auto FaultAddress = (uintptr_t)((siginfo_t*)info)->si_addr;
+
+  bool DoFlush = false;
+
+  {
+    FHU::ScopedSignalMaskWithSharedLock lk(_SyscallHandler->VMATracking.Mutex);
+
+    // Get the first mapping after FaultAddress, or end
+    // FaultAddress is inclusive
+    // If the write spans two pages, they will be flushed one at a time (generating two faults)
+    auto Entry = _SyscallHandler->VMATracking.VMAs.upper_bound(FaultAddress);
+
+    if (Entry != _SyscallHandler->VMATracking.VMAs.begin()) {
+      --Entry;
+
+      if (Entry->first <= FaultAddress && (Entry->first + Entry->second.Length) > FaultAddress) {
+        if (Entry->second.Writable) {
+          DoFlush = true;
+        }
+      }
+    }
+  }
+
+  // Perform the actual FlushCodeRange if an overlapping mapping was found.
+  // Note that this is done outside of the MemoryEntryMutex lock to avoid deadlocking in CompileCode
+  if (DoFlush) {
+    auto FaultBase = FEXCore::AlignDown(FaultAddress, FHU::FEX_PAGE_SIZE);
+    // Mark as read write before flush, so that if code is compiled after the Flush but before returning, the segfault will be re-raised
+    auto rv = mprotect((void*)FaultBase, FHU::FEX_PAGE_SIZE, PROT_READ | PROT_WRITE);
+    LogMan::Throw::AFmt(rv == 0, "mprotect({}, {}) failed", FaultBase, FHU::FEX_PAGE_SIZE);
+    FEXCore::Context::FlushCodeRange(CTX, FaultBase, FHU::FEX_PAGE_SIZE);
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void SyscallHandler::MarkGuestExecutableRange(uint64_t Start, uint64_t Length) {
+  const auto Base = Start & FHU::FEX_PAGE_MASK;
+  const auto Top = FEXCore::AlignUp(Start + Length, FHU::FEX_PAGE_SIZE);
+
+  {
+    if (SMCChecks != FEXCore::Config::CONFIG_SMC_MTRACK) {
+      return;
+    }
+
+    FHU::ScopedSignalMaskWithSharedLock lk(VMATracking.Mutex);
+
+    // Find the first mapping at or after the range ends, or ::end().
+    // Top points to the address after the end of the range
+    auto Mapping = VMATracking.VMAs.lower_bound(Top);
+
+    while (Mapping != VMATracking.VMAs.begin()) {
+      Mapping--;
+
+      const auto MapBase = Mapping->first;
+      const auto MapTop = MapBase + Mapping->second.Length;
+
+      if (MapTop <= Base) {
+        // Mapping ends before the Range start, exit
+        break;
+      } else {
+        const auto ProtectBase = std::max(MapBase, Base);
+        const auto ProtectSize = std::min(MapTop, Top) - ProtectBase;
+
+        int rv = mprotect((void*)ProtectBase, ProtectSize, PROT_READ);
+
+        LogMan::Throw::AFmt(rv == 0, "mprotect({}, {}) failed", ProtectBase, ProtectSize);
+      }
+    }
+  }
+}
+
+
+void SyscallHandler::ClearMemoryUnsafe(uintptr_t Base, uintptr_t Size) {
+  const auto Top = Base + Size;
+
+  // find the first Mapping at or after the Range ends, or ::end()
+  // Top is the first value after the end mapping
+  auto Mapping = VMATracking.VMAs.lower_bound(Top);
+
+  // Iterate backwards all mappings
+  while (Mapping != VMATracking.VMAs.begin()) {
+    Mapping--;
+
+    const auto MapBase = Mapping->first;
+    const auto MapTop = MapBase + Mapping->second.Length;
+
+    if (MapTop <= Base) {
+      // Mapping ends before the Range start, exit
+      break;
+    } else if (MapBase < Base && MapTop <= Top) {
+      // Mapping starts before Range & ends at or before Range, trim end
+      Mapping->second.Length = Base - MapBase;
+    } else if (MapBase < Base && MapTop > Top) {
+      // Mapping starts before Range & ends after Range, split
+
+      // trim first half
+      Mapping->second.Length = Base - MapBase;
+
+      // insert second half
+      VMATracking.VMAs.emplace(Top, VMAEntry{ MapTop - Top, Mapping->second.Writable });
+    } else if (MapBase >= Base && MapTop <= Top) {
+      // Mapping is included or equal to Range, delete
+      // returns next element, so -- is safe at loop
+      Mapping = VMATracking.VMAs.erase(Mapping);
+    } else if (MapBase >= Base && MapTop > Top) {
+      // Mapping starts after or at Range && ends after Range, trim start
+
+      // insert second half
+      VMATracking.VMAs.emplace(Top, VMAEntry{ MapTop - Top, Mapping->second.Writable });
+
+      // erase original
+      // returns next element, so it can be decremented safely in the next loop iteration
+      Mapping = VMATracking.VMAs.erase(Mapping);
+    } else {
+      ERROR_AND_DIE_FMT("Invalid Case");
+    }
+  }
+}
+
+void SyscallHandler::SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable) {
+  Size = FEXCore::AlignUp(Size + (Base & ~FHU::FEX_PAGE_MASK), FHU::FEX_PAGE_SIZE);
+  Base = Base & FHU::FEX_PAGE_MASK;
+  
+  {
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
+
+    // remove previous mappings
+    ClearMemoryUnsafe(Base, Size);
+
+    // Insert new mapping
+    VMATracking.VMAs.emplace(Base, VMAEntry{ Size, Writable });
+  }
+
+}
+
+void SyscallHandler::ClearMemoryMap(uintptr_t Base, uintptr_t Size) {
+  Size = FEXCore::AlignUp(Size + (Base & ~FHU::FEX_PAGE_MASK), FHU::FEX_PAGE_SIZE);
+  Base = Base & FHU::FEX_PAGE_MASK;
+
+  {
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
+    ClearMemoryUnsafe(Base, Size);
+  }
+}
+
+void SyscallHandler::TrackMmap(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size, int Prot, int Flags, int fd, off_t Offset) {
+  SetMemoryMap(Base, Size, Prot & PROT_WRITE);
+
+  if (!(Flags & MAP_ANONYMOUS)) {
+    auto filename = get_fdpath(fd);
+
+    FEXCore::Context::AddNamedRegion(Ctx, Base, Size, Offset, filename);
+  }
+  FEXCore::Context::FlushCodeRange(Ctx, (uintptr_t)Base, Size);
+}
+
+void SyscallHandler::TrackMunmap(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size) {
+  ClearMemoryMap((uintptr_t)Base, Size);
+  FEXCore::Context::RemoveNamedRegion(Ctx, (uintptr_t)Base, Size);
+  FEXCore::Context::FlushCodeRange(Ctx, (uintptr_t)Base, Size);
+}
+
+void SyscallHandler::TrackMprotect(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size, int Prot) {
+  SetMemoryMap((uintptr_t)Base, Size, Prot & PROT_WRITE);
+  if (Prot & PROT_EXEC) {
+    FEXCore::Context::FlushCodeRange(Ctx, (uintptr_t)Base, Size);
+  }
+}
+
+void SyscallHandler::TrackMremap(FEXCore::Context::Context *Ctx, uintptr_t OldAddress, size_t OldSize, size_t NewSize, int flags, uintptr_t NewAddress) {
+  // TODO
+}
+
+void SyscallHandler::TrackShmat(FEXCore::Context::Context *Ctx, int shmid, uintptr_t Base, int shmflg) {
+  // TODO
+}
+
+void SyscallHandler::TrackShmdt(FEXCore::Context::Context *Ctx, uintptr_t Base) {
+  // TODO
+}
+
+void SyscallHandler::TrackMadvise(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size, int advice) {
+  // TODO
 }
 
 }

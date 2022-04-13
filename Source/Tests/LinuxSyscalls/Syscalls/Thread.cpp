@@ -176,8 +176,8 @@ namespace FEX::HLE {
     auto Mutex = FEX::HLE::_SyscallHandler->FM.GetFDLock();
     Mutex->lock();
 
-    // also for core
-    FEXCore::Context::LockBeforeFork(Thread->CTX);
+    // also for VMA Tracking
+    FEX::HLE::_SyscallHandler->VMATracking.Mutex.lock();
 
     pid_t Result{};
     if (flags & CLONE_VFORK) {
@@ -190,7 +190,8 @@ namespace FEX::HLE {
     }
 
     // Unlock the mutex on both sides of the fork
-    FEXCore::Context::UnlockAfterFork(Thread->CTX);
+    FEX::HLE::_SyscallHandler->VMATracking.Mutex.unlock();
+    
     Mutex->unlock();
 
     if (Result == 0) {

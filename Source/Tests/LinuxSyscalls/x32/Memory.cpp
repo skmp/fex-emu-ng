@@ -18,28 +18,14 @@ $end_info$
 #include <system_error>
 #include <filesystem>
 
-static std::string get_fdpath(int fd)
-{
-  std::error_code ec;
-  return std::filesystem::canonical(std::filesystem::path("/proc/self/fd") / std::to_string(fd), ec).string();
-}
-
 namespace FEX::HLE::x32 {
   void RegisterMemory() {
     REGISTER_SYSCALL_IMPL_X32(mmap, [](FEXCore::Core::CpuStateFrame *Frame, uint32_t addr, uint32_t length, int prot, int flags, int fd, int32_t offset) -> uint64_t {
       auto Result = (uint64_t)static_cast<FEX::HLE::x32::x32SyscallHandler*>(FEX::HLE::_SyscallHandler)->GetAllocator()->
         mmap(reinterpret_cast<void*>(addr), length, prot,flags, fd, offset);
 
-      auto Thread = Frame->Thread;
       if (!FEX::HLE::HasSyscallError(Result)) {
-        FEXCore::Context::SetMemoryMap(Thread->CTX, Result, length, prot & PROT_WRITE);
-
-        if (!(flags & MAP_ANONYMOUS)) {
-          auto filename = get_fdpath(fd);
-
-          FEXCore::Context::AddNamedRegion(Thread->CTX, Result, length, offset, filename);
-        }
-        FEXCore::Context::FlushCodeRange(Thread, (uintptr_t)Result, length);
+        FEX::HLE::_SyscallHandler->TrackMmap(Frame->Thread->CTX, Result, length, prot, flags, fd, offset);
       }
       return Result;
     });
@@ -48,16 +34,8 @@ namespace FEX::HLE::x32 {
       auto Result = (uint64_t)static_cast<FEX::HLE::x32::x32SyscallHandler*>(FEX::HLE::_SyscallHandler)->GetAllocator()->
         mmap(reinterpret_cast<void*>(addr), length, prot,flags, fd, (uint64_t)pgoffset * 0x1000);
 
-      auto Thread = Frame->Thread;
       if (!FEX::HLE::HasSyscallError(Result)) {
-        FEXCore::Context::SetMemoryMap(Thread->CTX, Result, length, prot & PROT_WRITE);
-
-        if (!(flags & MAP_ANONYMOUS)) {
-          auto filename = get_fdpath(fd);
-
-          FEXCore::Context::AddNamedRegion(Thread->CTX, Result, length, pgoffset * 0x1000, filename);
-        }
-        FEXCore::Context::FlushCodeRange(Thread, (uintptr_t)Result, length);
+        FEX::HLE::_SyscallHandler->TrackMmap(Frame->Thread->CTX, Result, length, prot, flags, fd, pgoffset * 0x1000);
       }
 
       return Result;
@@ -68,9 +46,7 @@ namespace FEX::HLE::x32 {
         munmap(addr, length);
 
       if (Result == 0) {
-        FEXCore::Context::ClearMemoryMap(Frame->Thread->CTX, (uintptr_t)addr, length);
-        FEXCore::Context::RemoveNamedRegion(Frame->Thread->CTX, (uintptr_t)addr, length);
-        FEXCore::Context::FlushCodeRange(Frame->Thread, (uintptr_t)addr, length);
+        FEX::HLE::_SyscallHandler->TrackMunmap(Frame->Thread->CTX, (uintptr_t)addr, length);
       }
 
       return Result;
@@ -79,17 +55,21 @@ namespace FEX::HLE::x32 {
     REGISTER_SYSCALL_IMPL_X32(mprotect, [](FEXCore::Core::CpuStateFrame *Frame, void *addr, uint32_t len, int prot) -> uint64_t {
       uint64_t Result = ::mprotect(addr, len, prot);
       if (Result != -1) {
-        FEXCore::Context::SetMemoryMap(Frame->Thread->CTX, (uintptr_t)addr, len, prot & PROT_WRITE);
+        FEX::HLE::_SyscallHandler->TrackMprotect(Frame->Thread->CTX, (uintptr_t)addr, len, prot);
       }
-      if (Result != -1 && prot & PROT_EXEC) {
-        FEXCore::Context::FlushCodeRange(Frame->Thread, (uintptr_t)addr, len);
-      }
+
       SYSCALL_ERRNO();
     });
 
     REGISTER_SYSCALL_IMPL_X32(mremap, [](FEXCore::Core::CpuStateFrame *Frame, void *old_address, size_t old_size, size_t new_size, int flags, void *new_address) -> uint64_t {
-      return reinterpret_cast<uint64_t>(static_cast<FEX::HLE::x32::x32SyscallHandler*>(FEX::HLE::_SyscallHandler)->GetAllocator()->
+      uint64_t Result = reinterpret_cast<uint64_t>(static_cast<FEX::HLE::x32::x32SyscallHandler*>(FEX::HLE::_SyscallHandler)->GetAllocator()->
         mremap(old_address, old_size, new_size, flags, new_address));
+
+      if (!FEX::HLE::HasSyscallError(Result)) {
+        FEX::HLE::_SyscallHandler->TrackMremap(Frame->Thread->CTX, (uintptr_t)old_address, old_size, new_size, flags, Result);
+      }
+
+      return Result;
     });
 
     REGISTER_SYSCALL_IMPL_X32(mlockall, [](FEXCore::Core::CpuStateFrame *Frame, int flags) -> uint64_t {
@@ -106,7 +86,9 @@ namespace FEX::HLE::x32 {
       uint32_t ResultAddr{};
       uint64_t Result = static_cast<FEX::HLE::x32::x32SyscallHandler*>(FEX::HLE::_SyscallHandler)->GetAllocator()->
           shmat(shmid, reinterpret_cast<const void*>(shmaddr), shmflg, &ResultAddr);
+
       if (Result == 0) {
+        FEX::HLE::_SyscallHandler->TrackShmat(Frame->Thread->CTX, shmid, ResultAddr, shmflg);
         return ResultAddr;
       }
       else {
@@ -117,7 +99,12 @@ namespace FEX::HLE::x32 {
     REGISTER_SYSCALL_IMPL_X32(shmdt, [](FEXCore::Core::CpuStateFrame *Frame, const void *shmaddr) -> uint64_t {
       uint64_t Result = static_cast<FEX::HLE::x32::x32SyscallHandler*>(FEX::HLE::_SyscallHandler)->GetAllocator()->
         shmdt(shmaddr);
-      SYSCALL_ERRNO();
+      
+      if (!FEX::HLE::HasSyscallError(Result)) {
+        FEX::HLE::_SyscallHandler->TrackShmdt(Frame->Thread->CTX, (uintptr_t)shmaddr);
+      }
+
+      return Result;
     });
   }
 

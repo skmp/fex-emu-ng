@@ -15,6 +15,7 @@ $end_info$
 #include <sys/mman.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <FEXCore/Debug/InternalThreadState.h>
 
 namespace FEX::HLE {
   void RegisterMemory() {
@@ -41,6 +42,10 @@ namespace FEX::HLE {
     REGISTER_SYSCALL_IMPL_PASS_FLAGS(madvise, SyscallFlags::OPTIMIZETHROUGH | SyscallFlags::NOSYNCSTATEONENTRY,
       [](FEXCore::Core::CpuStateFrame *Frame, void *addr, size_t length, int32_t advice) -> uint64_t {
       uint64_t Result = ::madvise(addr, length, advice);
+
+      if (Result != -1) {
+        FEX::HLE::_SyscallHandler->TrackMadvise(Frame->Thread->CTX, (uintptr_t)addr, length, advice);
+      }
       SYSCALL_ERRNO();
     });
 

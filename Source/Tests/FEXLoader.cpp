@@ -328,26 +328,32 @@ int main(int argc, char **argv, char **const envp) {
   std::unique_ptr<FEX::HLE::MemAllocator> Allocator;
   FEXCore::Allocator::PtrCache *Base48Bit{};
 
+  std::function<bool(FEX::HLE::SyscallHandler *SyscallHandler)> LoadElf;
+
   if (Loader.Is64BitMode()) {
     // Destroy the 48th bit if it exists
     Base48Bit = FEXCore::Allocator::Steal48BitVA();
-    if (!Loader.MapMemory([CTX](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-      auto rv = FEXCore::Allocator::mmap(addr, length, prot, flags, fd, offset);
-      if (rv != MAP_FAILED) {
-        FEXCore::Context::SetMemoryMap(CTX, (uintptr_t)rv, length, prot & PROT_WRITE);
+    LoadElf = [&Loader, CTX] (FEX::HLE::SyscallHandler *SyscallHandler) {
+      if (!Loader.MapMemory([CTX, SyscallHandler](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+          auto rv = FEXCore::Allocator::mmap(addr, length, prot, flags, fd, offset);
+          if (rv != MAP_FAILED) {
+            SyscallHandler->TrackMmap(CTX, (uintptr_t)rv, length, prot, flags, fd, offset);
+          }
+          return rv;
+        }, [CTX, SyscallHandler](void *addr, size_t length) {
+          auto rv = FEXCore::Allocator::munmap(addr, length);
+          if (rv == 0) {
+            SyscallHandler->TrackMunmap(CTX, (uintptr_t)addr, length);
+          }
+          return rv;
+        })) {
+        // failed to map
+        LogMan::Msg::EFmt("Failed to map 64-bit elf file.");
+        return false;
+      } else {
+        return true;
       }
-      return rv;
-    }, [CTX](void *addr, size_t length) {
-      auto rv = FEXCore::Allocator::munmap(addr, length);
-      if (rv == 0) {
-        FEXCore::Context::ClearMemoryMap(CTX, (uintptr_t)addr, length);
-      }
-      return rv;
-    })) {
-      // failed to map
-      LogMan::Msg::EFmt("Failed to map 64-bit elf file.");
-      return -ENOEXEC;
-    }
+    };
   } else {
     FEX_CONFIG_OPT(Use32BitAllocator, FORCE32BITALLOCATOR);
     if (KernelVersion < FEX::HLE::SyscallHandler::KernelVersion(4, 17)) {
@@ -367,27 +373,31 @@ int main(int argc, char **argv, char **const envp) {
       Allocator = FEX::HLE::CreatePassthroughAllocator();
     }
 
-    if (!Loader.MapMemory([CTX, &Allocator](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
-      auto rv = Allocator->mmap(addr, length, prot, flags, fd, offset);
-      if (rv >= (void*)-4096) {
-        return MAP_FAILED;
+    LoadElf = [&Loader, CTX, &Allocator] (FEX::HLE::SyscallHandler *SyscallHandler) {
+      if (!Loader.MapMemory([CTX, SyscallHandler, &Allocator](void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+          auto rv = Allocator->mmap(addr, length, prot, flags, fd, offset);
+          if (rv >= (void*)-4096) {
+            return MAP_FAILED;
+          } else {
+            SyscallHandler->TrackMmap(CTX, (uintptr_t)rv, length, prot, flags, fd, offset);
+            return rv;
+          }
+        }, [CTX, SyscallHandler, &Allocator](void *addr, size_t length) {
+          auto rv = Allocator->munmap(addr, length);
+          if (rv == 0) {
+            SyscallHandler->TrackMunmap(CTX, (uintptr_t)addr, length);
+            return 0;
+          } else {
+            return -1;
+          }
+        })) {
+        // failed to map
+        LogMan::Msg::EFmt("Failed to map 32-bit elf file.");
+        return false;
       } else {
-        FEXCore::Context::SetMemoryMap(CTX, (uintptr_t)rv, length, prot & PROT_WRITE);
-        return rv;
+        return true;
       }
-    }, [CTX, &Allocator](void *addr, size_t length) {
-      auto rv = Allocator->munmap(addr, length);
-      if (rv == 0) {
-        FEXCore::Context::ClearMemoryMap(CTX, (uintptr_t)addr, length);
-        return 0;
-      } else {
-        return -1;
-      }
-    })) {
-      // failed to map
-      LogMan::Msg::EFmt("Failed to map 32-bit elf file.");
-      return -ENOEXEC;
-    }
+    };
   }
 
   // System allocator is now system allocator or FEX
@@ -415,6 +425,10 @@ int main(int argc, char **argv, char **const envp) {
 
   auto SyscallHandler = Loader.Is64BitMode() ? FEX::HLE::x64::CreateHandler(CTX, SignalDelegation.get())
                                              : FEX::HLE::x32::CreateHandler(CTX, SignalDelegation.get(), std::move(Allocator));
+
+  if (!LoadElf(SyscallHandler.get())) {
+    return -ENOEXEC;
+  }
 
   SyscallHandler->SetCodeLoader(&Loader);
 

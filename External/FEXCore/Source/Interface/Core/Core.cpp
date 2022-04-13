@@ -192,49 +192,6 @@ namespace FEXCore::Context {
     return NewThreadState;
   }
 
-  bool Context::HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext) {
-    auto CTX = Thread->CTX;
-
-    auto FaultAddress = (uintptr_t)((siginfo_t*)info)->si_addr;
-
-    bool DoFlush = false;
-
-    {
-      FHU::ScopedSignalMaskWithSharedMutex lk(CTX->MemoryEntryMutex, true);
-
-      // Get the first mapping after FaultAddress, or end
-      // FaultAddress is inclusive
-      // If the write spans two pages, they will be flushed one at a time (generating two faults)
-      auto Entry = CTX->MemoryMaps.upper_bound(FaultAddress);
-
-      if (Entry != CTX->MemoryMaps.begin()) {
-        --Entry;
-
-        if (Entry->first <= FaultAddress && (Entry->first + Entry->second.Length) > FaultAddress) {
-          if (Entry->second.Writable) {
-            DoFlush = true;
-          }
-        }
-      }
-    }
-
-    // Perform the actual FlushCodeRange if an overlapping mapping was found.
-    // Note that this is done outside of the MemoryEntryMutex lock to avoid deadlocking in CompileCode
-    if (DoFlush) {
-      std::lock_guard<std::mutex> lk(CTX->ThreadCreationMutex);
-      // Mark as read write before flush, so that if code is compiled after the Flush but before returning, the segfault will be re-raised
-      auto FaultBase = FEXCore::AlignDown(FaultAddress, FHU::FEX_PAGE_SIZE);
-      auto rv = mprotect((void*)FaultBase, FHU::FEX_PAGE_SIZE, PROT_READ | PROT_WRITE);
-      LogMan::Throw::AFmt(rv == 0, "mprotect({}, {}) failed", FaultBase, FHU::FEX_PAGE_SIZE);
-      for (auto &Thread : CTX->Threads) {
-        FlushCodeRange(Thread, FaultBase, FHU::FEX_PAGE_SIZE);
-      }
-      return true;
-    } else {
-      return false;
-    }
-  }
-
   FEXCore::Core::InternalThreadState* Context::InitCore(FEXCore::CodeLoader *Loader) {
     // Initialize the CPU core signal handlers
     switch (Config.Core) {
@@ -258,10 +215,6 @@ namespace FEXCore::Context {
     default:
       ERROR_AND_DIE_FMT("Unknown core configuration");
       break;
-    }
-
-    if (Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MTRACK) {
-      SignalDelegation->RegisterHostSignalHandler(SIGSEGV, HandleSegfault, true);
     }
 
     // Initialize GDBServer after the signal handlers are installed
@@ -684,60 +637,8 @@ namespace FEXCore::Context {
   }
 
   void Context::AddBlockMapping(FEXCore::Core::InternalThreadState *Thread, uint64_t Address, void *Ptr, uint64_t Start, uint64_t Length) {
-    Thread->LookupCache->AddBlockMapping(Address, Ptr, Start, Length);
-  }
-
-  void Context::SMCMarkReadOnly(uint64_t Start, uint64_t Length) {
-    const auto Base = Start & FHU::FEX_PAGE_MASK;
-    const auto Top = FEXCore::AlignUp(Start + Length, FHU::FEX_PAGE_SIZE);
-
-    {
-      FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, true);
-
-      // Find the first mapping at or after the range ends, or ::end().
-      // Top points to the address after the end of the range
-      auto Mapping = MemoryMaps.lower_bound(Top);
-
-      while (Mapping != MemoryMaps.begin()) {
-        Mapping--;
-
-        const auto MapBase = Mapping->first;
-        const auto MapTop = MapBase + Mapping->second.Length;
-
-        uint64_t ProtectBase = 0;
-        uint64_t ProtectSize = 0;
-
-        if (MapTop <= Base) {
-          // Mapping ends before the Range start, exit
-          break;
-        } else if (MapBase <= Base && MapTop <= Top) {
-          // Mapping starts before or at Range & ends at or before Range
-          // Base to MapTop
-          ProtectBase = Base;
-          ProtectSize = MapTop - Base;
-        } else if (MapBase <= Base && MapTop > Top) {
-          // Mapping starts before or at Range & ends after Range
-          // Base to Top
-          ProtectBase = Base;
-          ProtectSize = Top - Base;
-        } else if (MapBase >= Base && MapTop <= Top) {
-          // Mapping is included or equal to Range
-          // MapBase to MapTop
-          ProtectBase = MapBase;
-          ProtectSize = MapTop - MapBase;
-        } else if (MapBase >= Base && MapTop > Top) {
-          // Mapping starts after or at Range && ends after Range
-          // MapBase to Top
-          ProtectBase = MapBase;
-          ProtectSize = Top - MapBase;
-        } else {
-          ERROR_AND_DIE_FMT("Invalid Case");
-        }
-
-        int rv = mprotect((void*)ProtectBase, ProtectSize, PROT_READ);
-
-        LogMan::Throw::AFmt(rv == 0, "mprotect({}, {}) failed", ProtectBase, ProtectSize);
-      }
+    if (Thread->LookupCache->AddBlockMapping(Address, Ptr, Start, Length)) {
+      Thread->CTX->SyscallHandler->MarkGuestExecutableRange(Start, Length);
     }
   }
 
@@ -856,7 +757,7 @@ namespace FEXCore::Context {
           Thread->OpDispatcher->SetTrueJumpTarget(InvalidateCodeCond, CodeWasChangedBlock);
 
           Thread->OpDispatcher->SetCurrentCodeBlock(CodeWasChangedBlock);
-          Thread->OpDispatcher->_RemoveCodeEntry();
+          Thread->OpDispatcher->_RemoveThreadCodeEntry();
           Thread->OpDispatcher->_ExitFunction(Thread->OpDispatcher->_EntrypointOffset(Block.Entry + BlockInstructionsLength - GuestRIP, GPRSize));
 
           auto NextOpBlock = Thread->OpDispatcher->CreateNewCodeBlockAfter(CurrentBlock);
@@ -1016,10 +917,6 @@ namespace FEXCore::Context {
       return {};
     }
 
-    if (Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MTRACK) {
-      SMCMarkReadOnly(GuestRIP, Length);
-    }
-
     // Attempt to get the CPU backend to compile this code
     return {
       .CompiledCode = Thread->CPUBackend->CompileCode(GuestRIP, IRList, DebugData, RAData),
@@ -1080,7 +977,7 @@ namespace FEXCore::Context {
 
       // The compile service will always generate IR + DebugData + RAData
       // Remove the entries here to make sure we don't fail to insert later on
-      RemoveCodeEntry(Thread, GuestRIP);
+      RemoveThreadCodeEntry(Thread, GuestRIP);
       GeneratedIR = true;
     } else {
       ++Thread->CompileBlockReentrantRefCount;
@@ -1188,25 +1085,27 @@ namespace FEXCore::Context {
     }
   }
 
-  void FlushCodeRange(FEXCore::Core::InternalThreadState *Thread, uint64_t Start, uint64_t Length) {
+  static void FlushThreadCodeRange(FEXCore::Core::InternalThreadState *Thread, uint64_t Start, uint64_t Length) {
+    std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
 
-    if (Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MMAN || 
-        Thread->CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_MTRACK) {
-      
-      std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
+    auto lower = Thread->LookupCache->CodePages.lower_bound(Start >> 12);
+    auto upper = Thread->LookupCache->CodePages.upper_bound((Start + Length) >> 12);
 
-      auto lower = Thread->LookupCache->CodePages.lower_bound(Start >> 12);
-      auto upper = Thread->LookupCache->CodePages.upper_bound((Start + Length) >> 12);
-
-      for (auto it = lower; it != upper; it++) {
-        for (auto Address: it->second)
-          Context::RemoveCodeEntry(Thread, Address);
-        it->second.clear();
-      }
+    for (auto it = lower; it != upper; it++) {
+      for (auto Address: it->second)
+        Context::RemoveThreadCodeEntry(Thread, Address);
+      it->second.clear();
     }
   }
 
-  void Context::RemoveCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
+  void FlushCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length) {
+      std::lock_guard<std::mutex> lk(CTX->ThreadCreationMutex);
+      for (auto &Thread : CTX->Threads) {
+        FlushThreadCodeRange(Thread, Start, Length);
+      }
+  }
+
+  void Context::RemoveThreadCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
     std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
 
     Thread->LocalIRCache.erase(GuestRIP);
@@ -1219,7 +1118,7 @@ namespace FEXCore::Context {
     Thread->CurrentFrame->State.rip = RIP;
 
     // Erase the RIP from all the storage backings if it exists
-    RemoveCodeEntry(Thread, RIP);
+    RemoveThreadCodeEntry(Thread, RIP);
 
     // We don't care if compilation passes or not
     CompileBlock(Thread->CurrentFrame, RIP);
@@ -1274,87 +1173,6 @@ namespace FEXCore::Context {
     if (DebugServer) {
       DebugServer->AlertLibrariesChanged();
     }
-  }
-
-  static void ClearMemoryInternal(std::map<uint64_t, Context::MemoryEntry> &MemoryMaps, uintptr_t Base, uintptr_t Size) {
-    const auto Top = Base + Size;
-
-    // find the first Mapping at or after the Range ends, or ::end()
-    // Top is the first value after the end mapping
-    auto Mapping = MemoryMaps.lower_bound(Top);
-
-    // Iterate backwards all mappings
-    while (Mapping != MemoryMaps.begin()) {
-      Mapping--;
-
-      const auto MapBase = Mapping->first;
-      const auto MapTop = MapBase + Mapping->second.Length;
-
-      if (MapTop <= Base) {
-        // Mapping ends before the Range start, exit
-        break;
-      } else if (MapBase < Base && MapTop <= Top) {
-        // Mapping starts before Range & ends at or before Range, trim end
-        Mapping->second.Length = Base - MapBase;
-      } else if (MapBase < Base && MapTop > Top) {
-        // Mapping starts before Range & ends after Range, split
-
-        // trim first half
-        Mapping->second.Length = Base - MapBase;
-
-        // insert second half
-        MemoryMaps.emplace(Top, Context::MemoryEntry{ MapTop - Top, Mapping->second.Writable });
-      } else if (MapBase >= Base && MapTop <= Top) {
-        // Mapping is included or equal to Range, delete
-        // returns next element, so -- is safe at loop
-        Mapping = MemoryMaps.erase(Mapping);
-      } else if (MapBase >= Base && MapTop > Top) {
-        // Mapping starts after or at Range && ends after Range, trim start
-
-        // insert second half
-        MemoryMaps.emplace(Top, Context::MemoryEntry{ MapTop - Top, Mapping->second.Writable });
-
-        // erase original
-        // returns next element, so it can be decremented safely in the next loop iteration
-        Mapping = MemoryMaps.erase(Mapping);
-      } else {
-        ERROR_AND_DIE_FMT("Invalid Case");
-      }
-    }
-  }
-
-  void Context::SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable) {
-    Size = FEXCore::AlignUp(Size + (Base & ~FHU::FEX_PAGE_MASK), FHU::FEX_PAGE_SIZE);
-    Base = Base & FHU::FEX_PAGE_MASK;
-    
-    {
-      FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, false);
-
-      // remove previous mappings
-      ClearMemoryInternal(MemoryMaps, Base, Size);
-
-      // Insert new mapping
-      MemoryMaps.emplace(Base, MemoryEntry{ Size, Writable });
-    }
-
-  }
-
-  void Context::ClearMemoryMap(uintptr_t Base, uintptr_t Size) {
-    Size = FEXCore::AlignUp(Size + (Base & ~FHU::FEX_PAGE_MASK), FHU::FEX_PAGE_SIZE);
-    Base = Base & FHU::FEX_PAGE_MASK;
-
-    {
-      FHU::ScopedSignalMaskWithSharedMutex lk(MemoryEntryMutex, false);
-      ClearMemoryInternal(MemoryMaps, Base, Size);
-    }
-  }
-
-  void Context::LockBeforeFork() {
-    MemoryEntryMutex.lock_shared();
-  }
-
-  void Context::UnlockAfterFork() {
-    MemoryEntryMutex.unlock_shared();
   }
 
   void ConfigureAOTGen(FEXCore::Core::InternalThreadState *Thread, std::set<uint64_t> *ExternalBranches, uint64_t SectionMaxAddress) {

@@ -150,14 +150,6 @@ namespace FEXCore::Context {
     CTX->CleanupAfterFork(Thread);
   }
   
-  void LockBeforeFork(FEXCore::Context::Context *CTX) {
-    CTX->LockBeforeFork();
-  }
-
-  void UnlockAfterFork(FEXCore::Context::Context *CTX) {
-    CTX->UnlockAfterFork();
-  }
-
   void SetSignalDelegator(FEXCore::Context::Context *CTX, FEXCore::SignalDelegator *SignalDelegation) {
     CTX->SignalDelegation = SignalDelegation;
   }
@@ -199,14 +191,6 @@ namespace FEXCore::Context {
   }
   void RemoveNamedRegion(FEXCore::Context::Context *CTX, uintptr_t Base, uintptr_t Length) {
     return CTX->RemoveNamedRegion(Base, Length);
-  }
-
-  void SetMemoryMap(FEXCore::Context::Context *CTX, uintptr_t Base, uintptr_t Length, bool Writable) {
-    CTX->SetMemoryMap(Base, Length, Writable);
-  }
-
-  void ClearMemoryMap(FEXCore::Context::Context *CTX, uintptr_t Base, uintptr_t Length) {
-    CTX->ClearMemoryMap(Base, Length);
   }
 
 namespace Debug {

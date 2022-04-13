@@ -47,7 +47,7 @@ public:
 
   std::map<uint64_t, std::vector<uint64_t>> CodePages;
 
-  void AddBlockMapping(uint64_t Address, void *HostCode, uint64_t Start, uint64_t Length) {
+  bool AddBlockMapping(uint64_t Address, void *HostCode, uint64_t Start, uint64_t Length) {
     std::lock_guard<std::recursive_mutex> lk(WriteLock);
 
 #if defined(ASSERTIONS_ENABLED) && ASSERTIONS_ENABLED
@@ -56,7 +56,10 @@ public:
     BlockList.emplace(Address, (uintptr_t)HostCode);
     LOGMAN_THROW_A_FMT(InsertPoint.second == true, "Dupplicate block mapping added");
 
+    bool rv = false;
+
     for (auto CurrentPage = Start >> 12, EndPage = (Start + Length) >> 12; CurrentPage <= EndPage; CurrentPage++) {
+      rv |= CodePages[CurrentPage].size() == 0;
       CodePages[CurrentPage].push_back(Address);
     }
 
@@ -65,6 +68,8 @@ public:
     auto &L1Entry = reinterpret_cast<LookupCacheEntry*>(L1Pointer)[Address & L1_ENTRIES_MASK];
     L1Entry.GuestCode = Address;
     L1Entry.HostCode = (uintptr_t)HostCode;
+
+    return rv;
   }
 
   void Erase(uint64_t Address) {
@@ -85,7 +90,9 @@ public:
     auto &L1Entry = reinterpret_cast<LookupCacheEntry*>(L1Pointer)[Address & L1_ENTRIES_MASK];
     if (L1Entry.GuestCode == Address) {
       L1Entry.GuestCode = 0;
-      // leave L1Entry.HostCode as is
+      // Leave L1Entry.HostCode as is, so that concurrent lookups won't read a null pointer
+      // This is a soft guarantee for cross thread invalidation, as atomics are not used
+      // and it hasn't been thoroughly tested
     }
 
     // Do full map
@@ -125,6 +132,13 @@ public:
   constexpr static size_t L1_ENTRIES = 1 * 1024 * 1024; // Must be a power of 2
   constexpr static size_t L1_ENTRIES_MASK = L1_ENTRIES - 1;
 
+  // This needs to be taken before reads or writes to L2, L3, CodePages, Thread::LocalIRCache,
+  // and before writes to L1. Concurrent access from a thread that this LookupCache doesn't belong to 
+  // can only happen during cross thread invalidation (::Erase).
+  // All other operations must be done from the owning thread.
+  // Some care is taken so that L1 lookups can be done without locks, and even tearing happens
+  // it is unlikely to lead to a crash. This approach has not been fully vetted yet.
+  // Also note that L1 lookups might be inlined in the JIT Dispatcher and/or block ends.
   std::recursive_mutex WriteLock;
 
 private:

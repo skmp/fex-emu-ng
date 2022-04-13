@@ -16,6 +16,7 @@ $end_info$
 #include <FEXCore/Utils/CompilerDefs.h>
 
 #include <mutex>
+#include <shared_mutex>
 
 #include <errno.h>
 #include <stdint.h>
@@ -143,6 +144,7 @@ public:
   FEX_CONFIG_OPT(RootFSPath, ROOTFS);
   FEX_CONFIG_OPT(ThreadsConfig, THREADS);
   FEX_CONFIG_OPT(Is64BitMode, IS64BIT_MODE);
+  FEX_CONFIG_OPT(SMCChecks, SMCCHECKS);
 
   uint32_t GetHostKernelVersion() const { return HostKernelVersion; }
   uint32_t GetGuestKernelVersion() const { return GuestKernelVersion; }
@@ -163,6 +165,28 @@ public:
   static uint32_t KernelPatch(uint32_t Version) { return Version & 0xFFFF; }
 
   FEX::HLE::MemAllocator *Get32BitAllocator() { return Alloc32Handler.get(); }
+
+  ///// VMA TRACKING /////
+  static bool HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext);
+  virtual void MarkGuestExecutableRange(uint64_t Start, uint64_t Length) override;
+  void TrackMmap(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size, int Prot, int Flags, int fd, off_t Offset);
+  void TrackMunmap(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size);
+  void TrackMprotect(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size, int Prot);
+  void TrackMremap(FEXCore::Context::Context *Ctx, uintptr_t OldAddress, size_t OldSize, size_t NewSize, int flags, uintptr_t NewAddress);
+  void TrackShmat(FEXCore::Context::Context *Ctx, int shmid, uintptr_t Base, int shmflg);
+  void TrackShmdt(FEXCore::Context::Context *Ctx, uintptr_t Base);
+  void TrackMadvise(FEXCore::Context::Context *Ctx, uintptr_t Base, uintptr_t Size, int advice);
+
+  struct VMAEntry {
+    uint64_t Length;
+    bool Writable;
+  };
+  
+  struct {
+    std::shared_mutex Mutex{};
+    // Memory ranges indexed by page aligned starting address
+    std::map<uint64_t, VMAEntry> VMAs;
+  } VMATracking;
 
 protected:
   std::vector<SyscallFunctionDefinition> Definitions{};
@@ -191,6 +215,12 @@ private:
   #endif
 
   std::unique_ptr<FEX::HLE::MemAllocator> Alloc32Handler{};
+
+  void ClearMemoryUnsafe(uintptr_t Base, uintptr_t Size);
+  void SetMemoryMap(uintptr_t Base, uintptr_t Size, bool Writable);
+  void ClearMemoryMap(uintptr_t Base, uintptr_t Size);
+
+
 };
 
 uint64_t HandleSyscall(SyscallHandler *Handler, FEXCore::Core::CpuStateFrame *Frame, FEXCore::HLE::SyscallArguments *Args);
