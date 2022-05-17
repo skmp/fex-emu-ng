@@ -206,7 +206,12 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::
     ret();
   }
 
+if !defined(DEFER_HOST_SIGNALS)
   constexpr bool SignalSafeCompile = true;
+#else
+  constexpr bool SignalSafeCompile = false;
+#endif
+
   {
     ExitFunctionLinkerAddress = GetCursorAddress<uint64_t>();
     if (SRAEnabled)

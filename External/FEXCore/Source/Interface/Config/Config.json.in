@@ -189,7 +189,7 @@
         "Default": "false",
         "Desc": [
           "Uses JITSymbols to name JIT symbols grouped by library",
-          "Useful for querying how much time is spent in each guest library",
+          "Useful for querying how much time is spent in ea`ch guest library",
           "Can be used to help guide thunk generation"
         ]
       },

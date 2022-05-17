@@ -193,7 +193,11 @@ X86Dispatcher::X86Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::Inte
     ret();
   }
 
+if !defined(DEFER_HOST_SIGNALS)
   constexpr bool SignalSafeCompile = true;
+#else
+  constexpr bool SignalSafeCompile = false;
+#endif
   // Block creation
   {
     L(NoBlock);
