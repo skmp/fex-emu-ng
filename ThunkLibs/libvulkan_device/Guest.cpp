@@ -39,12 +39,12 @@ FOREACH_SYMBOL(PAIR)
     Setup = true;
 }
 
-PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice a_0,const char* a_1){
+PFN_vkVoidFunction IMPL(vkGetDeviceProcAddr)(VkDevice a_0,const char* a_1){
   if (!Setup) {
     DoSetup();
   }
 
-  auto ret = fexfn_pack_vkGetDeviceProcAddr(a_0, a_1);
+  auto ret = PACKER(vkGetDeviceProcAddr)(a_0, a_1);
 
   if (ret == nullptr) {
     // Early out if our instance doesn't have the pointer
@@ -62,14 +62,14 @@ PFN_vkVoidFunction vkGetDeviceProcAddr(VkDevice a_0,const char* a_1){
   return (PFN_vkVoidFunction)It->second;
 }
 
-PFN_vkVoidFunction vkGetInstanceProcAddr(VkInstance a_0,const char* a_1){
+PFN_vkVoidFunction IMPL(vkGetInstanceProcAddr)(VkInstance a_0,const char* a_1){
   if (!Setup) {
     DoSetup();
   }
 
   // Search our host install first to see if the pointer exists
   // This also populates a map on the host facing side
-  auto ret = fexfn_pack_vkGetInstanceProcAddr(a_0, a_1);
+  auto ret = PACKER(vkGetInstanceProcAddr)(a_0, a_1);
   if (ret == nullptr) {
     // Early out if our instance doesn't have the pointer
     // Definitely means we don't support it

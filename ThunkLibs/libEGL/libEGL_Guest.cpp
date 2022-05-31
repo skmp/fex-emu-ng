@@ -21,7 +21,7 @@ typedef void voidFunc();
 
 
 extern "C" {
-	voidFunc *eglGetProcAddress(const char *procname) {
+	voidFunc *IMPL(eglGetProcAddress)(const char *procname) {
 		// TODO: Fix this HACK
 		return glXGetProcAddress((const GLubyte*)procname);
 	}

@@ -109,7 +109,7 @@
       ]
     },
     "Vulkan-radeon": {
-      "Library": "libvulkan_radeon-guest.so",
+      "Library": "vulkan_device-guest.so",
       "Depends": [
         "xcb"
       ],
@@ -123,7 +123,7 @@
       ]
     },
     "Vulkan-lavapipe": {
-      "Library": "libvulkan_lvp-guest.so",
+      "Library": "vulkan_device-guest.so",
       "Depends": [
         "xcb"
       ],
@@ -134,7 +134,7 @@
       ]
     },
     "Vulkan-freedreno": {
-      "Library": "libvulkan_freedreno-guest.so",
+      "Library": "vulkan_device-guest.so",
       "Depends": [
         "xcb"
       ],
@@ -145,7 +145,7 @@
       ]
     },
     "Vulkan-intel": {
-      "Library": "libvulkan_intel-guest.so",
+      "Library": "vulkan_device-guest.so",
       "Depends": [
         "xcb"
       ],
@@ -156,7 +156,7 @@
       ]
     },
     "Vulkan-panfrost": {
-      "Library": "libvulkan_panfrost-guest.so",
+      "Library": "vulkan_device-guest.so",
       "Depends": [
         "xcb"
       ],
@@ -167,7 +167,7 @@
       ]
     },
     "Vulkan-nvidia": {
-      "Library": "libvulkan_nvidia-guest.so",
+      "Library": "vulkan_device-guest.so",
       "Depends": [
         "xcb"
       ],
@@ -181,7 +181,7 @@
       ]
     },
     "Vulkan-virtio": {
-      "Library": "libvulkan_virtio-guest.so",
+      "Library": "vulkan_device-guest.so",
       "Depends": [
         "xcb"
       ],

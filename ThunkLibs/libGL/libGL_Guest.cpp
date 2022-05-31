@@ -26,7 +26,7 @@ $end_info$
 typedef void voidFunc();
 
 extern "C" {
-	voidFunc *glXGetProcAddress(const GLubyte *procname) {
+	voidFunc *IMPL(glXGetProcAddress)(const GLubyte *procname) {
 
         for (int i = 0; internal_symtable[i].name; i++) {
             if (strcmp(internal_symtable[i].name, (const char*)procname) == 0) {
@@ -40,7 +40,7 @@ extern "C" {
 		return nullptr;
 	}
 
-	voidFunc *glXGetProcAddressARB(const GLubyte *procname) {
+	voidFunc *IMPL(glXGetProcAddressARB)(const GLubyte *procname) {
 		return glXGetProcAddress(procname);
 	}
 }

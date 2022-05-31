@@ -62,3 +62,6 @@ struct LoadlibArgs {
     fexthunks_fex_loadlib(&args); \
     init_fn (); \
   }
+
+#define PACKER(name) fexfn_pack_##name
+#define IMPL(name) fexfn_impl_##name
