@@ -157,10 +157,6 @@ bool IRValidation::Run(IREmitter *IREmit) {
       NodeIsLive.Set(ID.Value);
 
       switch (IROp->Op) {
-        case IR::OP_EXITFUNCTION: {
-          CurrentBlock->HasExit = true;
-        break;
-        }
         case IR::OP_CONDJUMP: {
           auto Op = IROp->C<IR::IROp_CondJump>();
 

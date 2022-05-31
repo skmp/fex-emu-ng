@@ -6,7 +6,6 @@
 namespace FEXCore::IR::Validation {
 
 struct BlockInfo {
-  bool HasExit;
   OrderedNode const *BlockNode;
 
   std::vector<OrderedNode*> Predecessors;
