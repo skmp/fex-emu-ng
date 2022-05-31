@@ -16,6 +16,10 @@
 #include <fmt/format.h>
 
 namespace FEXCore::IR {
+
+bool IsFragmentExit(FEXCore::IR::IROps Op);
+bool IsBlockExit(FEXCore::IR::IROps Op);
+
 class OrderedNode;
 class RegisterAllocationPass;
 class RegisterAllocationData;
