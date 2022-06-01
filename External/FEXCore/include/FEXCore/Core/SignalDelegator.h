@@ -13,6 +13,11 @@
 namespace FEXCore {
 namespace Core {
   struct InternalThreadState;
+  enum class SignalEvent {
+    Pause,
+    Stop,
+    Return,
+  };
 }
   struct FEX_PACKED GuestSAMask {
     uint64_t Val;
@@ -71,11 +76,12 @@ namespace Core {
 
     constexpr static size_t MAX_SIGNALS {64};
 
+    void NotifyThread(FEXCore::Core::InternalThreadState *Thread, FEXCore::Core::SignalEvent Event);
+
+  protected:
     // Use the last signal just so we are less likely to ever conflict with something that the guest application is using
     // 64 is used internally by Valgrind
     constexpr static size_t SIGNAL_FOR_PAUSE {63};
-
-  protected:
     FEXCore::Core::InternalThreadState *GetTLSThread();
     virtual void HandleGuestSignal(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext) = 0;
 

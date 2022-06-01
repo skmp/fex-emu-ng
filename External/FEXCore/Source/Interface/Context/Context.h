@@ -153,7 +153,6 @@ namespace FEXCore::Context {
     void Stop(bool IgnoreCurrentThread);
     void WaitForIdle();
     void StopThread(FEXCore::Core::InternalThreadState *Thread);
-    void SignalThread(FEXCore::Core::InternalThreadState *Thread, FEXCore::Core::SignalEvent Event);
 
     bool GetGdbServerStatus() const { return DebugServer != nullptr; }
     void StartGdbServer();

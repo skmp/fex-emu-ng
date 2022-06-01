@@ -56,13 +56,6 @@ namespace FEXCore::Core {
     std::vector<FEXCore::CPU::Relocation> *Relocations;
   };
 
-  enum class SignalEvent {
-    Nothing, // If the guest uses our signal we need to know it was errant on our end
-    Pause,
-    Stop,
-    Return,
-  };
-
   struct LocalIREntry {
     uint64_t StartAddr;
     uint64_t Length;
@@ -82,7 +75,6 @@ namespace FEXCore::Core {
     } RunningEvents;
 
     FEXCore::Context::Context *CTX;
-    std::atomic<SignalEvent> SignalReason{SignalEvent::Nothing};
 
     std::unique_ptr<FEXCore::Threads::Thread> ExecutionThread;
     InterruptableConditionVariable StartRunning;

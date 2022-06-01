@@ -18,7 +18,7 @@ $end_info$
 namespace FEXCore::CPU {
 [[noreturn]]
 static void SignalReturn(FEXCore::Core::InternalThreadState *Thread) {
-  Thread->CTX->SignalThread(Thread, FEXCore::Core::SignalEvent::Return);
+  Thread->CTX->SignalDelegation->NotifyThread(Thread, FEXCore::Core::SignalEvent::Return);
 
   LOGMAN_MSG_A_FMT("unreachable");
   FEX_UNREACHABLE;

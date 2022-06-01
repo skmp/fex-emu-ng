@@ -657,7 +657,11 @@ bool Dispatcher::HandleSIGILL(int Signal, void *info, void *ucontext) {
 }
 
 bool Dispatcher::HandleSignalPause(int Signal, void *info, void *ucontext) {
-  FEXCore::Core::SignalEvent SignalReason = ThreadState->SignalReason.load();
+  auto HostSigInfo = reinterpret_cast<siginfo_t *>(info);
+  if (HostSigInfo->si_code != SI_QUEUE)
+    return;
+  auto SignalReason = FEXCore::Core::SignalEvent(HostSigInfo->si_value.sival_int);
+  
   auto Frame = ThreadState->CurrentFrame;
 
   if (SignalReason == FEXCore::Core::SignalEvent::Pause) {
@@ -683,7 +687,6 @@ bool Dispatcher::HandleSignalPause(int Signal, void *info, void *ucontext) {
     // We use this to track if it is safe to clear cache
     ++SignalHandlerRefCounter;
 
-    ThreadState->SignalReason.store(FEXCore::Core::SignalEvent::Nothing);
     return true;
   }
 
@@ -718,7 +721,6 @@ bool Dispatcher::HandleSignalPause(int Signal, void *info, void *ucontext) {
       ++ThreadState->CTX->IdleWaitRefCount;
     }
 
-    ThreadState->SignalReason.store(FEXCore::Core::SignalEvent::Nothing);
     return true;
   }
 
@@ -729,7 +731,6 @@ bool Dispatcher::HandleSignalPause(int Signal, void *info, void *ucontext) {
     // We use this to track if it is safe to clear cache
     --SignalHandlerRefCounter;
 
-    ThreadState->SignalReason.store(FEXCore::Core::SignalEvent::Nothing);
     return true;
   }
 
