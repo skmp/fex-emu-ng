@@ -19,26 +19,31 @@ file(GLOB_RECURSE TESTS CONFIGURE_DEPENDS *.cpp)
 foreach(TEST ${TESTS})
   get_filename_component(TEST_NAME ${TEST} NAME_WLE)
 
+  # Used to insert a configuration dependency to the test file
+  CONFIGURE_FILE(${TEST} ${CMAKE_BINARY_DIR}/junk.file)
+
   file(READ ${TEST} TEST_CODE)
-  set(FLAGS_REGEX "//flags: ([^\n]+)")
+  set(FLAGS_REGEX "//[ ]*append cxxflags: ([^\n]+)")
 
-  string(REGEX MATCH ${FLAGS_REGEX} BUILD_FLAGS ${TEST_CODE})
+  string(REGEX MATCH ${FLAGS_REGEX} APPEND_CXX_FLAGS ${TEST_CODE})
   # if cannot handle multiline variables, so we have to match the line first
-  if(${BUILD_FLAGS} MATCHES ${FLAGS_REGEX})
-    set(BUILD_FLAGS "${CMAKE_MATCH_1}")
+  if(${APPEND_CXX_FLAGS} MATCHES ${FLAGS_REGEX})
+    set(APPEND_CXX_FLAGS "${CMAKE_MATCH_1}")
   else()
-    set(BUILD_FLAGS "-g -O2")
+    set(APPEND_CXX_FLAGS "")
   endif()
 
-  set(FLAGS_REGEX "//append flags: ([^\n]+)")
+  set(FLAGS_REGEX "//[ ]*append ldflags: ([^\n]+)")
 
-  string(REGEX MATCH ${FLAGS_REGEX} APPEND_FLAGS ${TEST_CODE})
+  string(REGEX MATCH ${FLAGS_REGEX} APPEND_LD_FLAGS ${TEST_CODE})
   # if cannot handle multiline variables, so we have to match the line first
-  if(${APPEND_FLAGS} MATCHES ${FLAGS_REGEX})
-    set(BUILD_FLAGS "${BUILD_FLAGS} ${CMAKE_MATCH_1}" )
+  if(${APPEND_LD_FLAGS} MATCHES ${FLAGS_REGEX})
+    set(APPEND_LD_FLAGS "${CMAKE_MATCH_1}" )
+  else()
+    set(APPEND_LD_FLAGS "")
   endif()
 
-  set(FLAGS_REGEX "//libs: ([^\n]+)")
+  set(FLAGS_REGEX "//[ ]*libs: ([^\n]+)")
 
   string(REGEX MATCH ${FLAGS_REGEX} LIBS ${TEST_CODE})
   # if cannot handle multiline variables, so we have to match the line first
@@ -53,11 +58,11 @@ foreach(TEST ${TESTS})
   set(BIN_NAME_64 "${TEST_NAME}.64")
 
   add_executable(${BIN_NAME_32} ${TEST})
-  set_target_properties(${BIN_NAME_32} PROPERTIES COMPILE_FLAGS "-m32 ${BUILD_FLAGS}" LINK_FLAGS "-m32")
+  set_target_properties(${BIN_NAME_32} PROPERTIES COMPILE_FLAGS "${APPEND_CXX_FLAGS} -m32 -g -O2 " LINK_FLAGS "${APPEND_LD_FLAGS} -m32")
   target_link_libraries(${BIN_NAME_32} ${LIBS})
 
   add_executable(${BIN_NAME_64} ${TEST})
-  set_target_properties(${BIN_NAME_64} PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS}" LINK_FLAGS "")
+  set_target_properties(${BIN_NAME_64} PROPERTIES COMPILE_FLAGS "${APPEND_CXX_FLAGS} -g -O2" LINK_FLAGS "${APPEND_LD_FLAGS}")
   target_link_libraries(${BIN_NAME_64} ${LIBS})
 
 endforeach()

@@ -18,6 +18,10 @@ foreach(TEST ${TESTS})
   get_filename_component(TEST_NAME ${TEST} NAME_WLE)
 
   file(READ ${TEST} TEST_CODE)
+  
+  # Used to insert a configuration dependency to the test file
+  CONFIGURE_FILE(${TEST} ${CMAKE_BINARY_DIR}/junk.file)
+
   set(ARGS_REGEX "auto args = \"([^\"]+)\";")
   string(REGEX MATCH ${ARGS_REGEX} TEST_ARGS ${TEST_CODE})
   # if cannot handle multiline variables, so we have to match the line first
