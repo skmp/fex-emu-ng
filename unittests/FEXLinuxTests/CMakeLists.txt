@@ -42,7 +42,7 @@ foreach(TEST ${TESTS})
       set(TEST_CASE "${VARIATION_NAME}.${BITNESS}")
       
       # Add jit test case
-      add_test(NAME "${VARIATION_NAME}.${BITNESS}.jit.flt"
+      add_test(NAME "${TEST_CASE}.jit.flt"
         COMMAND "python3" "${CMAKE_SOURCE_DIR}/Scripts/guest_test_runner.py"
         "${CMAKE_CURRENT_SOURCE_DIR}/Known_Failures"
         "${CMAKE_CURRENT_SOURCE_DIR}/Expected_Output"
@@ -55,7 +55,7 @@ foreach(TEST ${TESTS})
         "${VARIATION_ARG}")
       if (_M_X86_64)
         # Add host test case
-        add_test(NAME "${VARIATION_NAME}.${BITNESS}.host.flt"
+        add_test(NAME "${TEST_CASE}.host.flt"
           COMMAND "python3" "${CMAKE_SOURCE_DIR}/Scripts/guest_test_runner.py"
           "${CMAKE_CURRENT_SOURCE_DIR}/Known_Failures_Host"
           "${CMAKE_CURRENT_SOURCE_DIR}/Expected_Output"
