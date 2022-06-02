@@ -42,8 +42,8 @@ foreach(TEST ${TESTS})
   set(BIN_NAME_64 "${TEST_NAME}.64")
 
   add_executable(${BIN_NAME_32} ${TEST})
-  set_target_properties(${BIN_NAME_32} PROPERTIES COMPILE_FLAGS "-m32 ${BUILD_FLAGS}" LINK_FLAGS "-m32")
+  set_target_properties(${BIN_NAME_32} PROPERTIES COMPILE_FLAGS "-m32 ${BUILD_FLAGS}" LINK_FLAGS "-m32 ${BUILD_FLAGS}")
   add_executable(${BIN_NAME_64} ${TEST})
-  set_target_properties(${BIN_NAME_64} PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS}" LINK_FLAGS "")
+  set_target_properties(${BIN_NAME_64} PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS}" LINK_FLAGS "${BUILD_FLAGS}")
 
 endforeach()
