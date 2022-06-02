@@ -48,6 +48,7 @@ foreach(TEST ${TESTS})
         "${CMAKE_CURRENT_SOURCE_DIR}/Expected_Output"
         "${CMAKE_CURRENT_SOURCE_DIR}/Disabled_Tests"
         "${TEST_CASE}"
+        "guest"
         "$<TARGET_FILE:FEXLoader>"
         "--no-silent" "-c" "irjit" "-n" "500" "--"
         "${BIN_PATH}"
@@ -60,6 +61,7 @@ foreach(TEST ${TESTS})
           "${CMAKE_CURRENT_SOURCE_DIR}/Expected_Output"
           "${CMAKE_CURRENT_SOURCE_DIR}/Disabled_Tests_Host"
           "${TEST_CASE}"
+          "host"
           "${BIN_PATH}"
           "${VARIATION_ARG}")
       endif()
