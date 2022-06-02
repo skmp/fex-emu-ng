@@ -44,6 +44,7 @@ foreach(TEST ${TESTS})
   # if cannot handle multiline variables, so we have to match the line first
   if(${LIBS} MATCHES ${FLAGS_REGEX})
     set(LIBS "${CMAKE_MATCH_1}" )
+    string(REGEX REPLACE " |," ";" LIBS "${LIBS}")
   else()
     set(LIBS "")
   endif()
@@ -54,9 +55,9 @@ foreach(TEST ${TESTS})
   add_executable(${BIN_NAME_32} ${TEST})
   set_target_properties(${BIN_NAME_32} PROPERTIES COMPILE_FLAGS "-m32 ${BUILD_FLAGS}" LINK_FLAGS "-m32")
   target_link_libraries(${BIN_NAME_32} ${LIBS})
-  
+
   add_executable(${BIN_NAME_64} ${TEST})
-  target_link_libraries(${BIN_NAME_64} ${LIBS})
   set_target_properties(${BIN_NAME_64} PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS}" LINK_FLAGS "")
+  target_link_libraries(${BIN_NAME_64} ${LIBS})
 
 endforeach()
