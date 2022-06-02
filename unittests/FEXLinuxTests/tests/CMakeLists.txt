@@ -38,12 +38,25 @@ foreach(TEST ${TESTS})
     set(BUILD_FLAGS "${BUILD_FLAGS} ${CMAKE_MATCH_1}" )
   endif()
 
+  set(FLAGS_REGEX "//libs: ([^\n]+)")
+
+  string(REGEX MATCH ${FLAGS_REGEX} LIBS ${TEST_CODE})
+  # if cannot handle multiline variables, so we have to match the line first
+  if(${LIBS} MATCHES ${FLAGS_REGEX})
+    set(LIBS "${CMAKE_MATCH_1}" )
+  else()
+    set(LIBS "")
+  endif()
+
   set(BIN_NAME_32 "${TEST_NAME}.32")
   set(BIN_NAME_64 "${TEST_NAME}.64")
 
   add_executable(${BIN_NAME_32} ${TEST})
-  set_target_properties(${BIN_NAME_32} PROPERTIES COMPILE_FLAGS "-m32 ${BUILD_FLAGS}" LINK_FLAGS "-m32 ${BUILD_FLAGS}")
+  set_target_properties(${BIN_NAME_32} PROPERTIES COMPILE_FLAGS "-m32 ${BUILD_FLAGS}" LINK_FLAGS "-m32")
+  target_link_libraries(${BIN_NAME_32} ${LIBS})
+  
   add_executable(${BIN_NAME_64} ${TEST})
-  set_target_properties(${BIN_NAME_64} PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS}" LINK_FLAGS "${BUILD_FLAGS}")
+  target_link_libraries(${BIN_NAME_64} ${LIBS})
+  set_target_properties(${BIN_NAME_64} PROPERTIES COMPILE_FLAGS "${BUILD_FLAGS}" LINK_FLAGS "")
 
 endforeach()

@@ -1,4 +1,4 @@
-//append flags: -lpthread
+//libs: pthread
 #include <atomic>
 #include <errno.h>
 #include <pthread.h>
