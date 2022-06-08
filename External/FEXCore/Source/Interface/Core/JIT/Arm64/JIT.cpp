@@ -35,6 +35,10 @@ $end_info$
 #include <unistd.h>
 #include <string.h>
 
+// Map linking arbitrary addresses to corresponding guest functions. The map key is the "blessed" address. The entry value is the address of the target guest function to call.
+// TODO: Avoid global state
+std::unordered_map<uint64_t, uint64_t> blessed_functions;
+
 namespace {
 static uint64_t LUDIV(uint64_t SrcHigh, uint64_t SrcLow, uint64_t Divisor) {
   __uint128_t Source = (static_cast<__uint128_t>(SrcHigh) << 64) | SrcLow;
@@ -699,7 +703,7 @@ bool Arm64JITCore::IsGPR(IR::NodeID Node) const {
   return Class == IR::GPRClass || Class == IR::GPRFixedClass;
 }
 
-void *Arm64JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IRListView const *IR, [[maybe_unused]] FEXCore::Core::DebugData *DebugData, FEXCore::IR::RegisterAllocationData *RAData) {
+void *Arm64JITCore::CompileCode(const uint64_t Entry, [[maybe_unused]] FEXCore::IR::IRListView const *IR, [[maybe_unused]] FEXCore::Core::DebugData *DebugData, FEXCore::IR::RegisterAllocationData *RAData) {
   using namespace aarch64;
   JumpTargets.clear();
   uint32_t SSACount = IR->GetSSACount();
@@ -781,40 +785,54 @@ void *Arm64JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IR
 
   PendingTargetLabel = nullptr;
 
-  for (auto [BlockNode, BlockHeader] : IR->GetBlocks()) {
-    using namespace FEXCore::IR;
-#if defined(ASSERTIONS_ENABLED) && ASSERTIONS_ENABLED
-    auto BlockIROp = BlockHeader->CW<FEXCore::IR::IROp_CodeBlock>();
-    LOGMAN_THROW_A_FMT(BlockIROp->Header.Op == IR::OP_CODEBLOCK, "IR type failed to be a code block");
-#endif
+  if (blessed_functions.contains(Entry)) {
+      // Generate a trampoline that jumps to the target guest address. The
+      // original callee address is saved to RAX (sidestepping the
+      // normal calling convention).
+      LoadConstant(TMP1, Entry);
+      str(TMP1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, State.gregs[0])));
+      LoadConstant(FEXCore::CPU::SRA64[FEXCore::X86State::REG_RAX], Entry);
 
-    uintptr_t BlockStartHostCode = GetCursorAddress<uintptr_t>();
-    {
-      const auto Node = IR->GetID(BlockNode);
-      const auto IsTarget = JumpTargets.try_emplace(Node).first;
+      LoadConstant(TMP2, Dispatcher->AbsoluteLoopTopAddress);
+      LoadConstant(TMP3, blessed_functions.at(Entry));
+      str(TMP3, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, State.rip)));
+      br(TMP2);
+  } else {
+      for (auto [BlockNode, BlockHeader] : IR->GetBlocks()) {
+        using namespace FEXCore::IR;
+    #if defined(ASSERTIONS_ENABLED) && ASSERTIONS_ENABLED
+        auto BlockIROp = BlockHeader->CW<FEXCore::IR::IROp_CodeBlock>();
+        LOGMAN_THROW_A_FMT(BlockIROp->Header.Op == IR::OP_CODEBLOCK, "IR type failed to be a code block");
+    #endif
 
-      // if there's a pending branch, and it is not fall-through
-      if (PendingTargetLabel && PendingTargetLabel != &IsTarget->second)
-      {
-        b(PendingTargetLabel);
+        uintptr_t BlockStartHostCode = GetCursorAddress<uintptr_t>();
+        {
+          const auto Node = IR->GetID(BlockNode);
+          const auto IsTarget = JumpTargets.try_emplace(Node).first;
+
+          // if there's a pending branch, and it is not fall-through
+          if (PendingTargetLabel && PendingTargetLabel != &IsTarget->second)
+          {
+            b(PendingTargetLabel);
+          }
+          PendingTargetLabel = nullptr;
+
+          bind(&IsTarget->second);
+        }
+
+        for (auto [CodeNode, IROp] : IR->GetCode(BlockNode)) {
+          const auto ID = IR->GetID(CodeNode);
+
+          // Execute handler
+          OpHandler Handler = OpHandlers[IROp->Op];
+          (this->*Handler)(IROp, ID);
+        }
+
+        if (DebugData) {
+          DebugData->Subblocks.push_back({BlockStartHostCode, static_cast<uint32_t>(GetCursorAddress<uintptr_t>() - BlockStartHostCode)});
+        }
       }
-      PendingTargetLabel = nullptr;
-
-      bind(&IsTarget->second);
-    }
-
-    for (auto [CodeNode, IROp] : IR->GetCode(BlockNode)) {
-      const auto ID = IR->GetID(CodeNode);
-
-      // Execute handler
-      OpHandler Handler = OpHandlers[IROp->Op];
-      (this->*Handler)(IROp, ID);
-    }
-
-    if (DebugData) {
-      DebugData->Subblocks.push_back({BlockStartHostCode, static_cast<uint32_t>(GetCursorAddress<uintptr_t>() - BlockStartHostCode)});
-    }
-  }
+  } // End of new Thunking hack
 
   // Make sure last branch is generated. It certainly can't be eliminated here.
   if (PendingTargetLabel)
