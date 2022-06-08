@@ -51,87 +51,22 @@
         "/lib/x86_64-linux-gnu/libX11.so.6.4.0"
       ]
     },
-    "Vulkan-radeon": {
-      "Library": "libvulkan_radeon-guest.so",
+    "Vulkan": {
+      "Library": "libvulkan-guest.so",
       "Depends": [
         "xcb"
       ],
       "Overlay": [
-        "/usr/lib/x86_64-linux-gnu/libvulkan_radeon.so",
-        "/usr/local/lib/x86_64-linux-gnu/libvulkan_radeon.so",
-        "/lib/x86_64-linux-gnu/libvulkan_radeon.so"
+        "/lib/libvulkan.so",
+        "/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
+        "/usr/local/lib/x86_64-linux-gnu/libvulkan.so.1",
+        "/lib/x86_64-linux-gnu/libvulkan.so.1",
+        "/usr/lib/x86_64-linux-gnu/libvulkan.so.1.2.162",
+        "/usr/local/lib/x86_64-linux-gnu/libvulkan.so.1.2.162",
+        "/lib/x86_64-linux-gnu/libvulkan.so.1.2.162"
       ],
       "Comment": [
         "Vulkan library relies on xcb, otherwise it crashes with jemalloc"
-      ]
-    },
-    "Vulkan-lavapipe": {
-      "Library": "libvulkan_lvp-guest.so",
-      "Depends": [
-        "xcb"
-      ],
-      "Overlay": [
-        "/usr/lib/x86_64-linux-gnu/libvulkan_lvp.so",
-        "/usr/local/lib/x86_64-linux-gnu/libvulkan_lvp.so",
-        "/lib/x86_64-linux-gnu/libvulkan_lvp.so"
-      ]
-    },
-    "Vulkan-freedreno": {
-      "Library": "libvulkan_freedreno-guest.so",
-      "Depends": [
-        "xcb"
-      ],
-      "Overlay": [
-        "/usr/lib/x86_64-linux-gnu/libvulkan_freedreno.so",
-        "/usr/local/lib/x86_64-linux-gnu/libvulkan_freedreno.so",
-        "/lib/x86_64-linux-gnu/libvulkan_freedreno.so"
-      ]
-    },
-    "Vulkan-intel": {
-      "Library": "libvulkan_intel-guest.so",
-      "Depends": [
-        "xcb"
-      ],
-      "Overlay": [
-        "/usr/lib/x86_64-linux-gnu/libvulkan_intel.so",
-        "/usr/local/lib/x86_64-linux-gnu/libvulkan_intel.so",
-        "/lib/x86_64-linux-gnu/libvulkan_intel.so"
-      ]
-    },
-    "Vulkan-panfrost": {
-      "Library": "libvulkan_panfrost-guest.so",
-      "Depends": [
-        "xcb"
-      ],
-      "Overlay": [
-        "/usr/lib/x86_64-linux-gnu/libvulkan_panfrost.so",
-        "/usr/local/lib/x86_64-linux-gnu/libvulkan_panfrost.so",
-        "/lib/x86_64-linux-gnu/libvulkan_panfrost.so"
-      ]
-    },
-    "Vulkan-nvidia": {
-      "Library": "libvulkan_nvidia-guest.so",
-      "Depends": [
-        "xcb"
-      ],
-      "Overlay": [
-        "/usr/lib/x86_64-linux-gnu/libGLX_nvidia.so.0",
-        "/usr/local/lib/x86_64-linux-gnu/libGLX_nvidia.so.0",
-        "/lib/x86_64-linux-gnu/libGLX_nvidia.so.0"
-      ],
-      "Comment": [
-        "Not currently wired up"
-      ]
-    },
-    "Vulkan-virtio": {
-      "Library": "libvulkan_virtio-guest.so",
-      "Depends": [
-        "xcb"
-      ],
-      "Overlay": [
-        "/usr/lib/x86_64-linux-gnu/libvulkan_virtio.so",
-        "/usr/local/lib/x86_64-linux-gnu/libvulkan_virtio.so",
-        "/lib/x86_64-linux-gnu/libvulkan_virtio.so"
       ]
     },
     "xcb": {
