@@ -42,19 +42,6 @@ DEF_OP(Fence) {
   }
 }
 
-DEF_OP(Break) {
-  auto Op = IROp->C<IR::IROp_Break>();
-  switch (Op->Reason) {
-    case FEXCore::IR::Break_Halt: // HLT
-      StopThread(Data->State);
-    break;
-    case FEXCore::IR::Break_InvalidInstruction:
-      FHU::Syscalls::tgkill(Data->State->ThreadManager.PID, Data->State->ThreadManager.TID, SIGILL);
-    break;
-  default: LOGMAN_MSG_A_FMT("Unknown Break Reason: {}", Op->Reason); break;
-  }
-}
-
 DEF_OP(GetRoundingMode) {
   uint32_t GuestRounding{};
 #ifdef _M_ARM_64

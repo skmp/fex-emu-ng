@@ -21,6 +21,9 @@ bool IsFragmentExit(FEXCore::IR::IROps Op) {
   switch (Op) {
     case OP_EXITFUNCTION:
     case OP_BREAK:
+    case OP_THUNK:
+    case OP_SIGNALRETURN:
+    case OP_CALLBACKRETURN:
       return true;
     default:
     return false;

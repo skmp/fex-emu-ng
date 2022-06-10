@@ -27,14 +27,18 @@ DEF_OP(GuestCallIndirect) {
   LogMan::Msg::DFmt("Unimplemented");
 }
 
-DEF_OP(SignalReturn) {
-  // First we must reset the stack
-  ResetStack();
+DEF_OP(Break) {
+  auto Op = IROp->C<IR::IROp_Break>();
+  ldr(x0, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.BreakHandlerFunc)));
+  LoadConstant(x1, Op->Reason);
+  ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.BreakHandlerJitABI)));
+  br(x2);
+}
 
-  // Now branch to our signal return helper
-  // This can't be a direct branch since the code needs to live at a constant location
-  ldr(x0, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.SignalReturnHandler)));
-  br(x0);
+DEF_OP(SignalReturn) {
+  ldr(x0, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.SignalReturnHandlerFunc)));
+  ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.BreakHandlerJitABI)));
+  br(x2);
 }
 
 DEF_OP(CallbackReturn) {
@@ -491,6 +495,7 @@ void Arm64JITCore::RegisterBranchHandlers() {
 #define REGISTER_OP(op, x) OpHandlers[FEXCore::IR::IROps::OP_##op] = &Arm64JITCore::Op_##x
   REGISTER_OP(GUESTCALLDIRECT,   GuestCallDirect);
   REGISTER_OP(GUESTCALLINDIRECT, GuestCallIndirect);
+  REGISTER_OP(BREAK,             Break);
   REGISTER_OP(SIGNALRETURN,      SignalReturn);
   REGISTER_OP(CALLBACKRETURN,    CallbackReturn);
   REGISTER_OP(EXITFUNCTION,      ExitFunction);

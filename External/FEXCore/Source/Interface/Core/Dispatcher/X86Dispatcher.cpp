@@ -30,6 +30,8 @@ X86Dispatcher::X86Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::Inte
       FEXCore::Allocator::mmap(nullptr, MAX_DISPATCHER_CODE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0),
       nullptr) {
 
+  auto &Common = ThreadState->CurrentFrame->Pointers.Common;
+
   using namespace Xbyak;
   using namespace Xbyak::util;
   DispatchPtr = getCurr<CPUBackend::AsmDispatch>();
@@ -88,7 +90,8 @@ X86Dispatcher::X86Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::Inte
   Label ThreadPauseHandler;
 
   L(LoopTop);
-  AbsoluteLoopTopAddressFillSRA = AbsoluteLoopTopAddress = getCurr<uint64_t>();
+  
+  Common.DispatcherLoopTopJitABI = Common.DispatcherLoopTop = getCurr<uint64_t>();
 
   {
     // Load our RIP
@@ -314,74 +317,148 @@ X86Dispatcher::X86Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::Inte
     }
   }
 
+
   {
-    // Pause handler
-    ThreadPauseHandlerAddress = getCurr<uint64_t>();
-    L(ThreadPauseHandler);
+    // Break Handler
 
-    mov(rdi, reinterpret_cast<uintptr_t>(CTX));
-    mov(rsi, STATE);
-    mov(rax, reinterpret_cast<uint64_t>(SleepThread));
+    // Interpreter entrypoint
+    Common.IntBreak = getCurr<CPUBackend::IntBreak>();
+    mov(STATE, rdx);
 
-    call(rax);
+    // JIT entrypoint, STATE already set
+    // rsi: fn to call
+    // rdi: break code (optional)
+    Common.BreakHandlerJitABI = getCurr<uint64_t>();
 
-    // XXX: Unsupported atm
-    PauseReturnInstruction = getCurr<uint64_t>();
-    ud2();
+    // Reset host stack
+    mov(rsp, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation)]);
+
+    // Call handler
+    call(rsi);
   }
 
   {
+    // Signal Return Handler
+
+    // Interpreter entrypoint
+    Common.IntSignalReturn = getCurr<CPUBackend::IntSignalReturn>();
+    mov(STATE, rdi);
+
+    // JIT entrypoint, STATE already set
+    Common.SignalReturnHandler = SignalHandlerReturnAddress = getCurr<uint64_t>();
+    
+    // Reset host stack
+    mov(rsp, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation)]);
+
+    // Call handler
+    mov(rax, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.BreakHandlerFunc)]);
+    call(rax);
+  }
+
+  {
+    // Thunk Handler
+
+    // Interpreter entrypoint
+    Common.IntThunk = getCurr<CPUBackend::IntThunk>();
+    mov(STATE, rdx);
+
+    // JIT entrypoint, STATE already set
+    // rdi: data ptr
+    // rsi: thunkFn
+    Common.ThunkHandler = getCurr<uint64_t>();
+
+    // pivot to guest stack (already aligned)
+    mov(rax, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])]);
+
+    // pivot to guest stack
+    mov(rsp, rax);
+    
+    // call function
+    call(rsi);
+
+    // pivot to host stack
+    mov(rsp, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation)]);
+
+    // get guest return address
+    mov(rax, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])]);
+    mov(rcx. qword[rax]);
+    mov(qword [STATE + offsetof(FEXCore::Core::CpuState, rip)], rcx);
+    
+    // restore guest stack
+    mov(rcx. qword[rax-8]);
+    sub(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])], rcx);
+
+    // redispatch
+    b(&LoopTop);
+  }
+
+
+  {
+    // Thunk Callback Handler
+
+    // We should be on the guest pivoted stack here
     CallbackPtr = getCurr<CPUBackend::JITCallback>();
 
+    // Store context
     push(rbx);
     push(rbp);
     push(r12);
     push(r13);
     push(r14);
     push(r15);
-    sub(rsp, 8);
-
-    // First thing we need to move the thread state pointer back in to our register
-    mov(STATE, rdi);
-    // XXX: XMM?
-
-    // Make sure to adjust the refcounter so we don't clear the cache now
-    add(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, SignalHandlerRefCounter)], 1);
 
     // Now push the callback return trampoline to the guest stack
     // Guest will be misaligned because calling a thunk won't correct the guest's stack once we call the callback from the host
+    // FEX_TODO("32-bit support here")
     mov(rax, CTX->X86CodeGen.CallbackReturn);
+    push(rax);
 
-    // Store the trampoline to the guest stack
-    // Guest stack is now correctly misaligned after a regular call instruction
-    sub(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])], 16);
-    mov(rbx, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])]);
-    mov(qword [rbx], rax);
+    // First thing we need to move the thread state pointer back in to our register
+    mov(STATE, rdi);
+
+    // Save guest stack
+    mov(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])], rsp);
+
+    // pivot to host stack
+    mov(rsp, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation)]);
 
     // Store RIP to the context state
     mov(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.rip)], rsi);
 
-    // Back to the loop top now
+    // Dispatch
     jmp(LoopTop);
   }
 
   {
-    // Signal return handler
-    SignalHandlerReturnAddress = getCurr<uint64_t>();
-    ud2();
+    // Callback Return Handler
+
+    // Interpreter entrypoint
+    Common.IntCallbackReturn = getCurr<CPUBackend::IntCallbackReturn>();
+    mov(STATE, rdi);
+
+    // JIT entrypoint, STATE already set
+    Common.CallbackReturnHandler = getCurr<uint64_t>();
+
+    // Pivot to guest stack
+    mov(rsp, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])]);
+
+    // Restore context
+    push(r15);
+    push(r14);
+    push(r13);
+    push(r12);
+    push(rbp);
+    push(rbx);
+
+    // all done, return to thunk
+    ret();
   }
 
-  {
-    // Guest SIGILL handler
-    // Needs to be distinct from the SignalHandlerReturnAddress
-    UnimplementedInstructionAddress = getCurr<uint64_t>();
-    ud2();
-  }
-
-  {
+  #if 0
+/*
     // Guest Overflow handler
     // Needs to be distinct from the SignalHandlerReturnAddress
-    OverflowExceptionInstructionAddress = getCurr<uint64_t>();
+    Common.OverflowExceptionHandler = OverflowExceptionInstructionAddress = getCurr<uint64_t>();
 
     // ud2 = SIGILL
     // int3 = SIGTRAP
@@ -392,32 +469,8 @@ X86Dispatcher::X86Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::Inte
     mov(dword [rax + offsetof(Dispatcher::SynchronousFaultDataStruct, TrapNo)], X86State::X86_TRAPNO_OF);
     mov(dword [rax + offsetof(Dispatcher::SynchronousFaultDataStruct, err_code)], 0);
     mov(dword [rax + offsetof(Dispatcher::SynchronousFaultDataStruct, si_code)], 0x80);
-
-    hlt();
-  }
-
-  {
-    ReturnPtr = getCurr<CPUBackend::IntCallbackReturn>();
-//  using CallbackReturn =  FEX_NAKED void(*)(FEXCore::Core::InternalThreadState *Thread, volatile void *Host_RSP);
-
-    // rdi = thread
-    // rsi = rsp
-
-    mov(rsp, rsi);
-
-    // Now jump back to the thunk
-    // XXX: XMM?
-    add(rsp, 8);
-
-    pop(r15);
-    pop(r14);
-    pop(r13);
-    pop(r12);
-    pop(rbp);
-    pop(rbx);
-
-    ret();
-  }
+*/
+  #endif
   ready();
 
   Start = reinterpret_cast<uint64_t>(getCode());
@@ -433,16 +486,21 @@ X86Dispatcher::X86Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::Inte
 
   // Setup dispatcher specific pointers that need to be accessed from JIT code
   {
-    auto &Common = ThreadState->CurrentFrame->Pointers.Common;
+    
 
-    Common.DispatcherLoopTop = AbsoluteLoopTopAddress;
-    Common.DispatcherLoopTopFillSRA = AbsoluteLoopTopAddressFillSRA;
-    Common.ThreadStopHandlerSpillSRA = ThreadStopHandlerAddress;
-    Common.ThreadPauseHandlerSpillSRA = ThreadPauseHandlerAddress;
-    Common.UnimplementedInstructionHandler = UnimplementedInstructionAddress;
-    Common.OverflowExceptionHandler = OverflowExceptionInstructionAddress;
-    Common.SignalReturnHandler = SignalHandlerReturnAddress;
+    
     Common.L1Pointer = Thread->LookupCache->GetL1Pointer();
+
+    /*
+    Common.SignalReturnHandler = SignalHandlerReturnAddress;
+    Common.ThunkHandler = SignalHandlerReturnAddress;
+    Common.CallbackReturnHandler = SignalHandlerReturnAddress;
+
+    Common.IntSignalReturn = nullptr;
+    Common.IntThunk = nullptr;
+    Common.IntCallbackReturn = nullptr;
+
+    *
   }
 }
 

@@ -551,8 +551,15 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, FEXCore::Core::
     Common.ThreadPauseHandlerSpillSRA = ThreadPauseHandlerAddressSpillSRA;
     Common.UnimplementedInstructionHandler = UnimplementedInstructionAddress;
     Common.OverflowExceptionHandler = OverflowExceptionInstructionAddress;
-    Common.SignalReturnHandler = SignalHandlerReturnAddress;
     Common.L1Pointer = Thread->LookupCache->GetL1Pointer();
+
+    Common.SignalReturnHandler = SignalHandlerReturnAddress;
+    Common.ThunkHandler = SignalHandlerReturnAddress;
+    Common.CallbackReturnHandler = SignalHandlerReturnAddress;
+
+    Common.IntSignalReturn = nullptr;
+    Common.IntThunk = nullptr;
+    Common.IntCallbackReturn = nullptr;
 
     auto &AArch64 = ThreadState->CurrentFrame->Pointers.AArch64;
     AArch64.LUDIVHandler = LUDIVHandler;

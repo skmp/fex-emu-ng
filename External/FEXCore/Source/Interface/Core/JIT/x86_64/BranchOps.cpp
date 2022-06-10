@@ -37,39 +37,33 @@ DEF_OP(GuestCallIndirect) {
   LogMan::Msg::DFmt("Unimplemented");
 }
 
-DEF_OP(SignalReturn) {
-  // Adjust the stack first for a regular return
-  if (SpillSlots) {
-    add(rsp, SpillSlots * 16); // + 8 to consume return address
-  }
 
-  jmp(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.SignalReturnHandler)]);
+DEF_OP(Break) {
+  auto Op = IROp->C<IR::IROp_Break>();
+  mov(rdi, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.BreakHandlerFunc)]);
+  mov(rsi, Op->Reason);
+  jmp(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.BreakHandlerJitABI)]);
+}
+
+DEF_OP(SignalReturn) {
+  mov(rdi, qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.SignalReturnHandlerFunc)]);
+  jmp(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.BreakHandlerJitABI)]);
+}
+
+DEF_OP(Thunk) {
+  auto Op = IROp->C<IR::IROp_Thunk>();
+
+  mov(rdi, GetSrc<RA_64>(Op->Header.Args[0].ID()));
+
+  auto thunkFn = ThreadState->CTX->ThunkHandler->LookupThunk(Op->ThunkNameHash);
+
+  mov(rax, reinterpret_cast<uintptr_t>(thunkFn));
+
+  jmp(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.ThunkHandler)]);
 }
 
 DEF_OP(CallbackReturn) {
-  // Adjust the stack first for a regular return
-  if (SpillSlots) {
-    add(rsp, SpillSlots * 16); // + 8 to consume return address
-  }
-
-  // Make sure to adjust the refcounter so we don't clear the cache now
-  sub(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, SignalHandlerRefCounter)], 1);
-
-  // We need to adjust an additional 8 bytes to get back to the original "misaligned" RSP state
-  add(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, State.gregs[X86State::REG_RSP])], 8);
-
-  // Now jump back to the thunk
-  // XXX: XMM?
-  add(rsp, 8);
-
-  pop(r15);
-  pop(r14);
-  pop(r13);
-  pop(r12);
-  pop(rbp);
-  pop(rbx);
-
-  ret();
+  jmp(qword [STATE + offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.CallbackReturnHandler)]);
 }
 
 DEF_OP(ExitFunction) {
@@ -204,31 +198,6 @@ DEF_OP(Syscall) {
   mov (GetDst<RA_64>(Node), rax);
 }
 
-DEF_OP(Thunk) {
-  auto Op = IROp->C<IR::IROp_Thunk>();
-
-  auto NumPush = RA64.size();
-
-  for (auto &Reg : RA64)
-    push(Reg);
-
-  if (NumPush & 1)
-    sub(rsp, 8); // Align
-
-  mov(rdi, GetSrc<RA_64>(Op->Header.Args[0].ID()));
-
-  auto thunkFn = ThreadState->CTX->ThunkHandler->LookupThunk(Op->ThunkNameHash);
-
-  mov(rax, reinterpret_cast<uintptr_t>(thunkFn));
-  call(rax);
-
-  if (NumPush & 1)
-    add(rsp, 8); // Align
-
-  for (uint32_t i = RA64.size(); i > 0; --i)
-    pop(RA64[i - 1]);
-}
-
 DEF_OP(ValidateCode) {
   auto Op = IROp->C<IR::IROp_ValidateCode>();
   const auto* OldCode = (const uint8_t*)&Op->CodeOriginalLow;
@@ -322,6 +291,7 @@ void X86JITCore::RegisterBranchHandlers() {
 #define REGISTER_OP(op, x) OpHandlers[FEXCore::IR::IROps::OP_##op] = &X86JITCore::Op_##x
   REGISTER_OP(GUESTCALLDIRECT,   GuestCallDirect);
   REGISTER_OP(GUESTCALLINDIRECT, GuestCallIndirect);
+  REGISTER_OP(BREAK,             Break);
   REGISTER_OP(SIGNALRETURN,      SignalReturn);
   REGISTER_OP(CALLBACKRETURN,    CallbackReturn);
   REGISTER_OP(EXITFUNCTION,      ExitFunction);

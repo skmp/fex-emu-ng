@@ -55,7 +55,6 @@ namespace FEXCore::CPU {
         FEXCore::Core::InternalThreadState *State{};
         uint64_t CurrentEntry{};
         FEXCore::IR::IRListView const *CurrentIR{};
-        volatile void *StackEntry{};
         void *SSAData{};
         struct {
           bool Quit;

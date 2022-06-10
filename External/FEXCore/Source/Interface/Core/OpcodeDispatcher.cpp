@@ -117,32 +117,6 @@ void OpDispatchBuilder::SyscallOp(OpcodeArgs) {
   }
 }
 
-void OpDispatchBuilder::ThunkOp(OpcodeArgs) {
-  // Calculate flags early.
-  CalculateDeferredFlags();
-
-  const uint32_t RSPOffset = GPROffset(X86State::REG_RSP);
-  const uint8_t GPRSize = CTX->GetGPRSize();
-  uint8_t *sha256 = (uint8_t *)(Op->PC + 2);
-
-  _Thunk(
-    _LoadContext(GPRSize, GPRClass, GPROffset(X86State::REG_RDI)),
-    *reinterpret_cast<SHA256Sum*>(sha256)
-  );
-
-  auto Constant = _Constant(GPRSize);
-  auto OldSP = _LoadContext(GPRSize, GPRClass, RSPOffset);
-  auto NewRIP = _LoadMem(GPRClass, GPRSize, OldSP, GPRSize);
-  OrderedNode *NewSP = _Add(OldSP, Constant);
-
-  // Store the new stack pointer
-  _StoreContext(GPRSize, GPRClass, NewSP, RSPOffset);
-
-  // Store the new RIP
-  _ExitFunction(NewRIP);
-  BlockSetRIP = true;
-}
-
 void OpDispatchBuilder::LEAOp(OpcodeArgs) {
   // LEA specifically ignores segment prefixes
   if (CTX->Config.Is64BitMode) {
@@ -257,21 +231,47 @@ void OpDispatchBuilder::IRETOp(OpcodeArgs) {
 
 void OpDispatchBuilder::SIGRETOp(OpcodeArgs) {
   const uint8_t GPRSize = CTX->GetGPRSize();
-  // Store the new RIP
+  
+  // CalculateDeferredFlags can be removed here
+
+  // This could be optimized out
+  auto NewRIP = GetRelocatedPC(Op);
+  _StoreContext(GPRSize, GPRClass, NewRIP, offsetof(FEXCore::Core::CPUState, rip));
+
   _SignalReturn();
-  auto NewRIP = _LoadContext(GPRSize, GPRClass, offsetof(FEXCore::Core::CPUState, rip));
-  // This ExitFunction won't actually get hit but needs to exist
-  _ExitFunction(NewRIP);
+  
+  BlockSetRIP = true;
+}
+
+void OpDispatchBuilder::ThunkOp(OpcodeArgs) {
+  // CalculateDeferredFlags can be removed here
+
+  const uint8_t GPRSize = CTX->GetGPRSize();
+  uint8_t *sha256 = (uint8_t *)(Op->PC + 2);
+
+  // This could be optimized out
+  auto NewRIP = GetRelocatedPC(Op);
+  _StoreContext(GPRSize, GPRClass, NewRIP, offsetof(FEXCore::Core::CPUState, rip));
+
+  _Thunk(
+    _LoadContext(GPRSize, GPRClass, GPROffset(X86State::REG_RDI)),
+    *reinterpret_cast<SHA256Sum*>(sha256)
+  );
+  
   BlockSetRIP = true;
 }
 
 void OpDispatchBuilder::CallbackReturnOp(OpcodeArgs) {
+  // CalculateDeferredFlags can be removed here
+
   const uint8_t GPRSize = CTX->GetGPRSize();
-  // Store the new RIP
+
+  // This could be optimized out
+  auto NewRIP = GetRelocatedPC(Op);
+  _StoreContext(GPRSize, GPRClass, NewRIP, offsetof(FEXCore::Core::CPUState, rip));
+
   _CallbackReturn();
-  auto NewRIP = _LoadContext(GPRSize, GPRClass, offsetof(FEXCore::Core::CPUState, rip));
-  // This ExitFunction won't actually get hit but needs to exist
-  _ExitFunction(NewRIP);
+  
   BlockSetRIP = true;
 }
 

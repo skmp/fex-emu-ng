@@ -27,48 +27,6 @@ DEF_OP(Fence) {
   }
 }
 
-DEF_OP(Break) {
-  auto Op = IROp->C<IR::IROp_Break>();
-  switch (Op->Reason) {
-    case FEXCore::IR::Break_Unimplemented: // Hard fault
-    case FEXCore::IR::Break_Interrupt: // Guest ud2
-      hlt(4);
-      break;
-    case FEXCore::IR::Break_Overflow: // overflow
-      ResetStack();
-      ldr(TMP1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.OverflowExceptionHandler)));
-      br(TMP1);
-      break;
-    case FEXCore::IR::Break_Halt: { // HLT
-      // Time to quit
-      // Set our stack to the starting stack location
-      ldr(TMP1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, ReturningStackLocation)));
-      add(sp, TMP1, 0);
-
-      // Now we need to jump to the thread stop handler
-      ldr(TMP1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.ThreadStopHandlerSpillSRA)));
-      br(TMP1);
-      break;
-    }
-    case FEXCore::IR::Break_Interrupt3: { // INT3
-      ResetStack();
-      ldr(TMP1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.ThreadPauseHandlerSpillSRA)));
-      br(TMP1);
-      break;
-    }
-    case FEXCore::IR::Break_InvalidInstruction:
-    {
-      ResetStack();
-
-      ldr(TMP1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.UnimplementedInstructionHandler)));
-      br(TMP1);
-
-      break;
-    }
-    default: LOGMAN_MSG_A_FMT("Unknown Break reason: {}", Op->Reason);
-  }
-}
-
 DEF_OP(GetRoundingMode) {
   auto Dst = GetReg<RA_64>(Node);
   mrs(Dst, FPCR);
@@ -232,7 +190,6 @@ void Arm64JITCore::RegisterMiscHandlers() {
   REGISTER_OP(BEGINBLOCK, NoOp);
   REGISTER_OP(ENDBLOCK,   NoOp);
   REGISTER_OP(FENCE,      Fence);
-  REGISTER_OP(BREAK,      Break);
   REGISTER_OP(PHI,        NoOp);
   REGISTER_OP(PHIVALUE,   NoOp);
   REGISTER_OP(PRINT,      Print);

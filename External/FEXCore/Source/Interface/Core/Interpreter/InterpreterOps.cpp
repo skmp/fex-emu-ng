@@ -335,7 +335,6 @@ void InterpreterOps::Op_NoOp(FEXCore::IR::IROp_Header *IROp, IROpData *Data, IR:
 }
 
 void InterpreterOps::InterpretIR(FEXCore::Core::CpuStateFrame *Frame, FEXCore::IR::IRListView const *CurrentIR) {
-  volatile void *StackEntry = alloca(0);
 
   uintptr_t ListSize = CurrentIR->GetSSACount();
 
@@ -349,7 +348,6 @@ void InterpreterOps::InterpretIR(FEXCore::Core::CpuStateFrame *Frame, FEXCore::I
   OpData.SSAData = alloca(ListSize * 16);
   OpData.CurrentEntry = Frame->State.rip;
   OpData.CurrentIR = CurrentIR;
-  OpData.StackEntry = StackEntry;
   OpData.BlockIterator = CurrentIR->GetBlocks().begin();
 
   // Clear them all to zero. Required for Zero-extend semantics

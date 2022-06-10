@@ -59,7 +59,6 @@ InterpreterCore::InterpreterCore(FEXCore::Context::Context *ctx, FEXCore::Core::
   auto &Interpreter = Thread->CurrentFrame->Pointers.Interpreter;
 
   Interpreter.FragmentExecuter = reinterpret_cast<uint64_t>(&InterpreterOps::InterpretIR); 
-  Interpreter.CallbackReturn = Dispatcher->ReturnPtr;
 
   ClearCache();
 }

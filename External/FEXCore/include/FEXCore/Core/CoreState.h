@@ -105,6 +105,8 @@ namespace FEXCore::Core {
       uint64_t CPUIDFunction{};
       uint64_t SyscallHandlerObj{};
       uint64_t SyscallHandlerFunc{};
+      uint64_t BreakHandlerFunc{};
+      uint64_t SignalReturnHandlerFunc{};
 
       uint64_t FallbackHandlerPointers[FallbackHandlerIndex::OPINDEX_MAX];
 
@@ -112,14 +114,17 @@ namespace FEXCore::Core {
       /**
        * @name Dispatcher pointers
        * @{ */
-      uint64_t DispatcherLoopTop{};
-      uint64_t DispatcherLoopTopFillSRA{};
-      uint64_t ThreadStopHandlerSpillSRA{};
-      uint64_t ThreadPauseHandlerSpillSRA{};
-      uint64_t UnimplementedInstructionHandler{};
-      uint64_t OverflowExceptionHandler{};
-      uint64_t SignalReturnHandler{};
       uint64_t L1Pointer{};
+      uint64_t DispatcherLoopTop{}; // Generic entry, Will fill SRA if needed
+      uint64_t DispatcherLoopTopJitABI{}; // Assumes SRA and such are filled
+      
+      uint64_t BreakHandlerJitABI{};
+      uint64_t ThunkHandlerJitABI{};
+      uint64_t CallbackReturnHandlerJitABI{};
+
+      CPU::CPUBackend::IntBreak IntBreak;
+      CPU::CPUBackend::IntCallbackReturn IntCallbackReturn;
+      CPU::CPUBackend::IntThunk IntThunk;
       /**  @} */
     } Common;
 
@@ -149,7 +154,6 @@ namespace FEXCore::Core {
 
       struct {
         uint64_t FragmentExecuter;
-        CPU::CPUBackend::IntCallbackReturn CallbackReturn;
       } Interpreter;
     };
   };

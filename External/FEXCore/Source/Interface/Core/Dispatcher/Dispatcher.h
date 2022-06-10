@@ -35,32 +35,6 @@ public:
   virtual ~Dispatcher() = default;
   CPUBackend::AsmDispatch DispatchPtr;
   CPUBackend::JITCallback CallbackPtr;
-  CPUBackend::IntCallbackReturn ReturnPtr;
-
-  /**
-   * @name Dispatch Helper functions
-   * @{ */
-  uint64_t ThreadStopHandlerAddress{};
-  uint64_t ThreadStopHandlerAddressSpillSRA{};
-  uint64_t AbsoluteLoopTopAddress{};
-  uint64_t AbsoluteLoopTopAddressFillSRA{};
-  uint64_t ThreadPauseHandlerAddress{};
-  uint64_t ThreadPauseHandlerAddressSpillSRA{};
-  uint64_t ExitFunctionLinkerAddress{};
-  uint64_t SignalHandlerReturnAddress{};
-  uint64_t UnimplementedInstructionAddress{};
-  uint64_t OverflowExceptionInstructionAddress{};
-
-  uint64_t PauseReturnInstruction{};
-
-  /**  @} */
-
-  struct SynchronousFaultDataStruct {
-    bool FaultToTopAndGeneratedException{};
-    uint32_t TrapNo;
-    uint32_t err_code;
-    uint32_t si_code;
-  } SynchronousFaultData;
 
   uint64_t Start{};
   uint64_t End{};

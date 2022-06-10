@@ -16,6 +16,8 @@ $end_info$
 
 namespace FEXCore {
 
+typedef void ThunkedFunction(void* ArgsRv);
+
 namespace IR {
   class IRListView;
   class RegisterAllocationData;
@@ -124,7 +126,10 @@ class Dispatcher;
 
     using AsmDispatch = FEX_NAKED void(*)(FEXCore::Core::CpuStateFrame *Frame);
     using JITCallback = FEX_NAKED void(*)(FEXCore::Core::CpuStateFrame *Frame, uint64_t RIP);
-    using IntCallbackReturn =  FEX_NAKED void(*)(FEXCore::Core::InternalThreadState *Thread, volatile void *Host_RSP);
+    
+    using IntBreak = FEX_NAKED void(*)(uint64_t Func, uint64_t Reason, FEXCore::Core::CpuStateFrame *Thread);
+    using IntThunk = FEX_NAKED void(*)(void *ArgsRv, ThunkedFunction *Fn, FEXCore::Core::CpuStateFrame *Frame);
+    using IntCallbackReturn = FEX_NAKED void(*)(FEXCore::Core::CpuStateFrame *Thread);
 
     JITCallback CallbackPtr{};
   protected:
