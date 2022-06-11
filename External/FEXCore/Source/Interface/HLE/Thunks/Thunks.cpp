@@ -31,7 +31,6 @@ struct LoadlibArgs {
 
 static thread_local FEXCore::Core::InternalThreadState *Thread;
 
-extern std::unordered_map<uint64_t, uint64_t> blessed_functions;
 
 namespace FEXCore {
     struct ExportEntry { uint8_t *sha256; ThunkedFunction* Fn; };
@@ -76,8 +75,8 @@ namespace FEXCore {
                 return;
             }
 
-            LogMan::Msg::DFmt("Thunks: Generating trampoline to guest function {:#x} at addr {:#x}", args->guest_addr, args->host_addr);
-            blessed_functions.emplace(args->host_addr, args->guest_addr);
+            LogMan::Msg::DFmt("Thunks: Adding GCH trampoline to guest function {:#x} at addr {:#x}", args->guest_addr, args->host_addr);
+            Thread->CTX->AddGCHTrampoline(args->host_addr, args->guest_addr);
         }
 
         static void LoadLib(void *ArgsV) {

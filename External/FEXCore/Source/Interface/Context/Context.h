@@ -177,6 +177,8 @@ namespace FEXCore::Context {
     CustomIRResult AddCustomIREntrypoint(uintptr_t Entrypoint, std::function<void(uintptr_t Entrypoint, FEXCore::IR::IREmitter *)> Handler, void *Creator, void *Data);
 
     void RemoveCustomIREntrypoint(uintptr_t Entrypoint);
+    void AddGCHTrampoline(uintptr_t HostEntrypoint, uintptr_t GuestThunkEntrypoint);
+    void RemoveGCHTrampoline(uintptr_t HostEntrypoint);
 
     // Debugger interface
     void CompileRIP(FEXCore::Core::InternalThreadState *Thread, uint64_t RIP);
