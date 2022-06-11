@@ -532,6 +532,9 @@ if (BUILD_THUNKS)
     )"
     DEPENDS guest-libs
   )
+
+  add_custom_target(thunk-libs)
+  add_dependencies(thunk-libs host-libs guest-libs)
 endif()
 
 set(FEX_VERSION_MAJOR "0")
