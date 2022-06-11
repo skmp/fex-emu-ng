@@ -155,6 +155,7 @@ public:
 
   void BeginFunction(uint64_t RIP, std::vector<FEXCore::Frontend::Decoder::DecodedBlocks> const *Blocks);
   void Finalize();
+  void GenerateGCHTrampoline(uintptr_t HostEntrypoint, uintptr_t GuestThunkEntrypoint);
 
   // Dispatch builder functions
 #define OpcodeArgs [[maybe_unused]] FEXCore::X86Tables::DecodedOp Op

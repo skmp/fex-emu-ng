@@ -4483,7 +4483,10 @@ void OpDispatchBuilder::BeginFunction(uint64_t RIP, std::vector<FEXCore::Fronten
   auto IRHeader = _IRHeader(InvalidNode, 0);
   Current_Header = IRHeader.first;
   Current_HeaderNode = IRHeader;
-  CreateJumpBlocks(Blocks);
+
+  if (Blocks != nullptr) {
+    CreateJumpBlocks(Blocks);
+  }
 
   auto Block = GetNewJumpBlock(RIP);
   SetCurrentCodeBlock(Block);
@@ -4513,6 +4516,21 @@ void OpDispatchBuilder::Finalize() {
     SetCurrentCodeBlock(Handler.second.BlockEntry);
     _ExitFunction(_EntrypointOffset(Handler.first - Entry, GPRSize));
   }
+}
+
+
+void OpDispatchBuilder::GenerateGCHTrampoline(uintptr_t HostEntrypoint, uintptr_t GuestThunkEntrypoint) {
+  LOGMAN_THROW_A_FMT(CTX->Config.Is64BitMode || !!(HostEntrypoint >> 32), "64-bit HostEntrypoint in 32-bit mode");
+  LOGMAN_THROW_A_FMT(CTX->Config.Is64BitMode || !!(GuestThunkEntrypoint >> 32), "64-bit GuestThunkEntrypoint in 32-bit mode");
+
+  const uint8_t GPRSize = CTX->GetGPRSize();
+  
+  BeginFunction(HostEntrypoint, nullptr);
+  {
+    _StoreContext(GPRSize, GPRClass, _Constant(HostEntrypoint), GPROffset(X86State::REG_R11));
+    _ExitFunction(_Constant(GuestThunkEntrypoint));
+  }
+  Finalize();
 }
 
 uint8_t OpDispatchBuilder::GetDstSize(X86Tables::DecodedOp Op) const {

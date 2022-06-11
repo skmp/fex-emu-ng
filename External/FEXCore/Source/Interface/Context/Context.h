@@ -177,6 +177,8 @@ namespace FEXCore::Context {
     bool AddCustomIREntrypoint(uintptr_t Entrypoint, std::function<void(uintptr_t Entrypoint, FEXCore::IR::IREmitter *)> Handler);
 
     void RemoveCustomIREntrypoint(uintptr_t Entrypoint);
+    void AddGCHTrampoline(uintptr_t HostEntrypoint, uintptr_t GuestThunkEntrypoint);
+    void RemoveGCHTrampoline(uintptr_t HostEntrypoint);
 
     // Debugger interface
     void CompileRIP(FEXCore::Core::InternalThreadState *Thread, uint64_t RIP);
@@ -349,6 +351,8 @@ namespace FEXCore::Context {
     
     std::shared_mutex CustomIRMutex;
     std::unordered_map<uint64_t, std::function<void(uintptr_t Entrypoint, FEXCore::IR::IREmitter *)>> CustomIRHandlers;
+    std::shared_mutex GCHTrampolinesMutex;
+    std::unordered_map<uint64_t, uint64_t> GCHTrampolines;
   };
 
   uint64_t HandleSyscall(FEXCore::HLE::SyscallHandler *Handler, FEXCore::Core::CpuStateFrame *Frame, FEXCore::HLE::SyscallArguments *Args);

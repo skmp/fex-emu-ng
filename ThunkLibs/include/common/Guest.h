@@ -138,8 +138,9 @@ __attribute__((no_stack_protector))
 inline Result CallHostThunkFromRuntimePointer(Args... args) {
 #ifndef _M_ARM_64
     uintptr_t host_addr;
-    asm("mov %%rax, %0" : "=r" (host_addr));
+    asm("mov %%r11, %0" : "=r" (host_addr));
 #else
+    // guest thunks are never _M_ARM_64, why is this needed?
     uintptr_t host_addr = 0;
 #endif
 
