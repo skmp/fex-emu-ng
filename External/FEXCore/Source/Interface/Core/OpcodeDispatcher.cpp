@@ -4523,22 +4523,6 @@ void OpDispatchBuilder::Finalize() {
   }
 }
 
-
-void OpDispatchBuilder::GenerateGCHTrampoline(uintptr_t HostEntrypoint, uintptr_t GuestThunkEntrypoint) {
-  LOGMAN_THROW_A_FMT(CTX->Config.Is64BitMode || !!(HostEntrypoint >> 32), "64-bit HostEntrypoint in 32-bit mode");
-  LOGMAN_THROW_A_FMT(CTX->Config.Is64BitMode || !!(GuestThunkEntrypoint >> 32), "64-bit GuestThunkEntrypoint in 32-bit mode");
-
-  const uint8_t GPRSize = CTX->GetGPRSize();
-  
-  BeginFunction(HostEntrypoint, nullptr);
-  SetNewBlockIfChanged(HostEntrypoint);
-  {
-    _StoreContext(GPRSize, GPRClass, _Constant(HostEntrypoint), GPROffset(X86State::REG_R11));
-    _ExitFunction(_Constant(GuestThunkEntrypoint));
-  }
-  Finalize();
-}
-
 uint8_t OpDispatchBuilder::GetDstSize(X86Tables::DecodedOp Op) const {
   static constexpr std::array<uint8_t, 8> Sizes = {
     0, // Invalid DEF
