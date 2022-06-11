@@ -136,6 +136,7 @@ namespace FEXCore {
             if (it != Thunks.end()) {
                 return it->second;
             } else {
+                LogMan::Msg::EFmt("Unable to find thunk {:x}{:x}{:x}{:x}", sha256.data[0], sha256.data[1], sha256.data[2], sha256.data[3]);
                 return nullptr;
             }
         }
