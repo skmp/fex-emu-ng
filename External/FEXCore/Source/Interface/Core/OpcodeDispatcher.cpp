@@ -4486,6 +4486,11 @@ void OpDispatchBuilder::BeginFunction(uint64_t RIP, std::vector<FEXCore::Fronten
 
   if (Blocks != nullptr) {
     CreateJumpBlocks(Blocks);
+  } else {
+    // Create a single block with RIP as the entry point
+    auto CodeNode = CreateCodeNode();
+
+    JumpTargets.try_emplace(RIP, JumpTargetInfo{CodeNode, false});
   }
 
   auto Block = GetNewJumpBlock(RIP);
@@ -4526,6 +4531,7 @@ void OpDispatchBuilder::GenerateGCHTrampoline(uintptr_t HostEntrypoint, uintptr_
   const uint8_t GPRSize = CTX->GetGPRSize();
   
   BeginFunction(HostEntrypoint, nullptr);
+  SetNewBlockIfChanged(HostEntrypoint);
   {
     _StoreContext(GPRSize, GPRClass, _Constant(HostEntrypoint), GPROffset(X86State::REG_R11));
     _ExitFunction(_Constant(GuestThunkEntrypoint));
