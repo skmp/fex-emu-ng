@@ -9,8 +9,8 @@ struct fex_gen_config;
 #define VK_USE_PLATFORM_WAYLAND_KHR
 #include <vulkan/vulkan.h>
 
-template<> struct fex_gen_config<vkGetDeviceProcAddr> : fexgen::custom_host_impl, fexgen::custom_guest_entrypoint, fexgen::returns_guest_pointer {};
-template<> struct fex_gen_config<vkGetInstanceProcAddr> : fexgen::custom_host_impl, fexgen::custom_guest_entrypoint, fexgen::returns_guest_pointer {};
+template<> struct fex_gen_config<vkGetDeviceProcAddr> : fexgen::custom_guest_entrypoint, fexgen::returns_guest_pointer {};
+template<> struct fex_gen_config<vkGetInstanceProcAddr> : fexgen::custom_guest_entrypoint, fexgen::returns_guest_pointer {};
 
 namespace internal {
 
@@ -25,7 +25,7 @@ template<> struct fex_gen_config<vkAcquireProfilingLockKHR> {};
 template<> struct fex_gen_config<vkAcquireXlibDisplayEXT> {};
 template<> struct fex_gen_config<vkAllocateCommandBuffers> {};
 template<> struct fex_gen_config<vkAllocateDescriptorSets> {};
-template<> struct fex_gen_config<vkAllocateMemory> : fexgen::custom_host_impl {};
+template<> struct fex_gen_config<vkAllocateMemory> {};
 template<> struct fex_gen_config<vkBeginCommandBuffer> {};
 template<> struct fex_gen_config<vkBindAccelerationStructureMemoryNV> {};
 template<> struct fex_gen_config<vkBindBufferMemory> {};
@@ -180,7 +180,7 @@ template<> struct fex_gen_config<vkCreateDescriptorPool> {};
 template<> struct fex_gen_config<vkCreateDescriptorSetLayout> {};
 template<> struct fex_gen_config<vkCreateDescriptorUpdateTemplate> {};
 template<> struct fex_gen_config<vkCreateDescriptorUpdateTemplateKHR> {};
-template<> struct fex_gen_config<vkCreateDevice> : fexgen::custom_host_impl {};
+template<> struct fex_gen_config<vkCreateDevice> {};
 template<> struct fex_gen_config<vkCreateDisplayModeKHR> {};
 template<> struct fex_gen_config<vkCreateDisplayPlaneSurfaceKHR> {};
 template<> struct fex_gen_config<vkCreateEvent> {};
@@ -191,7 +191,7 @@ template<> struct fex_gen_config<vkCreateHeadlessSurfaceEXT> {};
 template<> struct fex_gen_config<vkCreateImage> {};
 template<> struct fex_gen_config<vkCreateImageView> {};
 template<> struct fex_gen_config<vkCreateIndirectCommandsLayoutNV> {};
-template<> struct fex_gen_config<vkCreateInstance> : fexgen::custom_host_impl {};
+template<> struct fex_gen_config<vkCreateInstance> {};
 template<> struct fex_gen_config<vkCreatePipelineCache> {};
 template<> struct fex_gen_config<vkCreatePipelineLayout> {};
 template<> struct fex_gen_config<vkCreatePrivateDataSlotEXT> {};
@@ -205,7 +205,7 @@ template<> struct fex_gen_config<vkCreateSampler> {};
 template<> struct fex_gen_config<vkCreateSamplerYcbcrConversion> {};
 template<> struct fex_gen_config<vkCreateSamplerYcbcrConversionKHR> {};
 template<> struct fex_gen_config<vkCreateSemaphore> {};
-template<> struct fex_gen_config<vkCreateShaderModule> : fexgen::custom_host_impl {};
+template<> struct fex_gen_config<vkCreateShaderModule> {};
 template<> struct fex_gen_config<vkCreateSharedSwapchainsKHR> {};
 template<> struct fex_gen_config<vkCreateSwapchainKHR> {};
 template<> struct fex_gen_config<vkCreateValidationCacheEXT> {};
@@ -265,7 +265,7 @@ template<> struct fex_gen_config<vkEnumeratePhysicalDevices> {};
 template<> struct fex_gen_config<vkFlushMappedMemoryRanges> {};
 template<> struct fex_gen_config<vkFreeCommandBuffers> {};
 template<> struct fex_gen_config<vkFreeDescriptorSets> {};
-template<> struct fex_gen_config<vkFreeMemory> : fexgen::custom_host_impl {};
+template<> struct fex_gen_config<vkFreeMemory> {};
 template<> struct fex_gen_config<vkGetAccelerationStructureBuildSizesKHR> {};
 template<> struct fex_gen_config<vkGetAccelerationStructureDeviceAddressKHR> {};
 template<> struct fex_gen_config<vkGetAccelerationStructureHandleNV> {};

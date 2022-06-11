@@ -19,6 +19,7 @@ $end_info$
 
 #include "ldr_ptrs.inl"
 
+/*
 static bool SetupInstance{};
 static std::mutex SetupMutex{};
 
@@ -94,7 +95,7 @@ static void FEXFN_IMPL(vkFreeMemory)(VkDevice a_0, VkDeviceMemory a_1, const VkA
   LDR_PTR(vkFreeMemory)(a_0, a_1, nullptr);
 }
 
-
+*/
 #include "function_unpacks.inl"
 
 static ExportEntry exports[] = {
