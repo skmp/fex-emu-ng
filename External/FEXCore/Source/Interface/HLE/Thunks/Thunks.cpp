@@ -10,6 +10,7 @@ $end_info$
 #include <FEXCore/Debug/InternalThreadState.h>
 #include <FEXCore/Utils/LogManager.h>
 #include <FEXCore/IR/IR.h>
+#include <FEXCore/IR/IREmitter.h>
 #include "Thunks.h"
 
 #include <dlfcn.h>
@@ -75,8 +76,26 @@ namespace FEXCore {
                 return;
             }
 
+            auto CTX = Thread->CTX;
+
+            LOGMAN_THROW_A_FMT(CTX->Config.Is64BitMode || !(args->guest_addr >> 32), "64-bit args->guest_addr in 32-bit mode");
+            LOGMAN_THROW_A_FMT(CTX->Config.Is64BitMode || !(args->host_addr >> 32), "64-bit args->host_addr in 32-bit mode");
+
             LogMan::Msg::DFmt("Thunks: Adding GCH trampoline to guest function {:#x} at addr {:#x}", args->guest_addr, args->host_addr);
-            Thread->CTX->AddGCHTrampoline(args->host_addr, args->guest_addr);
+            
+            Thread->CTX->AddCustomIREntrypoint(args->host_addr, [CTX, GuestThunkEntrypoint = args->host_addr]
+                (uintptr_t Entrypoint, FEXCore::IR::IREmitter *emit) {
+
+                auto IRHeader = emit->_IRHeader(emit->Invalid(), 0);
+                auto Block = emit->CreateCodeNode();
+                IRHeader.first->Blocks = emit->WrapNode(Block);
+                emit->SetCurrentCodeBlock(Block);
+
+                const uint8_t GPRSize = CTX->GetGPRSize();
+
+                emit->_StoreContext(GPRSize, IR::GPRClass, emit->_Constant(Entrypoint), offsetof(Core::CPUState, gregs[X86State::REG_R11]));
+                emit->_ExitFunction(emit->_Constant(GuestThunkEntrypoint));
+            });
         }
 
         static void LoadLib(void *ArgsV) {
