@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.14)
 project(host-thunks)
 
+add_custom_target(host-libs)
+
 set(CMAKE_CXX_STANDARD 17)
 set (HOSTLIBS_DATA_DIRECTORY "${CMAKE_INSTALL_PREFIX}/lib/fex-emu" CACHE PATH "global data directory")
 
@@ -58,6 +60,7 @@ function(add_host_lib NAME)
   endif()
 
   add_library(${NAME}-host SHARED ${SOURCE_FILE} ${GEN_lib${NAME}})
+  add_dependencies(host-libs ${NAME}-host)
   target_include_directories(${NAME}-host PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/gen/lib${NAME}")
   target_link_libraries(${NAME}-host PRIVATE dl)
   target_link_libraries(${NAME}-host PRIVATE lib${NAME}-deps)
