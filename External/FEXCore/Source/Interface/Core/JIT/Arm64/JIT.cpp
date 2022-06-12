@@ -38,9 +38,6 @@ $end_info$
 static constexpr size_t INITIAL_CODE_SIZE = 1024 * 1024 * 16;
 // We don't want to move above 128MB atm because that means we will have to encode longer jumps
 static constexpr size_t MAX_CODE_SIZE = 1024 * 1024 * 128;
-// Map linking arbitrary addresses to corresponding guest functions. The map key is the "blessed" address. The entry value is the address of the target guest function to call.
-// TODO: Avoid global state
-std::unordered_map<uint64_t, uint64_t> blessed_functions;
 
 namespace {
 static uint64_t LUDIV(uint64_t SrcHigh, uint64_t SrcLow, uint64_t Divisor) {
