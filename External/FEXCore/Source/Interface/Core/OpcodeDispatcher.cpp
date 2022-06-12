@@ -4483,15 +4483,7 @@ void OpDispatchBuilder::BeginFunction(uint64_t RIP, std::vector<FEXCore::Fronten
   auto IRHeader = _IRHeader(InvalidNode, 0);
   Current_Header = IRHeader.first;
   Current_HeaderNode = IRHeader;
-
-  if (Blocks != nullptr) {
-    CreateJumpBlocks(Blocks);
-  } else {
-    // Create a single block with RIP as the entry point
-    auto CodeNode = CreateCodeNode();
-
-    JumpTargets.try_emplace(RIP, JumpTargetInfo{CodeNode, false});
-  }
+  CreateJumpBlocks(Blocks);
 
   auto Block = GetNewJumpBlock(RIP);
   SetCurrentCodeBlock(Block);
