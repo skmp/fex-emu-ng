@@ -10,13 +10,14 @@ CPUBackend::CPUBackend(FEXCore::Core::InternalThreadState *ThreadState, size_t I
 
 CPUBackend::~CPUBackend() {
   for (auto CodeBuffer : CodeBuffers) {
-    FreeCodeBuffer(CodeBuffer);
+    //FreeCodeBuffer(CodeBuffer);
   }
   CodeBuffers.clear();
 }
 
 auto CPUBackend::GetEmptyCodeBuffer() -> CodeBuffer * {
-  if (ThreadState->CurrentFrame->SignalHandlerRefCounter == 0) {
+  //ThreadState->CurrentFrame->SignalHandlerRefCounter
+  if constexpr (false) {
     if (CodeBuffers.empty()) {
       auto NewCodeBuffer = AllocateNewCodeBuffer(InitialCodeSize);
       EmplaceNewCodeBuffer(NewCodeBuffer);

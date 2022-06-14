@@ -74,7 +74,8 @@ void *InterpreterCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR:
 
   auto Size = AlignUp(IR->GetInlineSize(), 16);
   if ((BufferUsed + Size) > CurrentCodeBuffer->Size) {
-    ThreadState->CTX->ClearCodeCache(ThreadState);
+    //ThreadState->CTX->ClearCodeCache(ThreadState);
+    ClearCache();
   }
 
   auto DestBuffer = CurrentCodeBuffer->Ptr + BufferUsed;

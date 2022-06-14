@@ -67,24 +67,6 @@ public:
     return 0;
   }
 
-  std::map<uint64_t, std::vector<uint64_t>> CodePages;
-
-  // Appends Block {Address} to CodePages [Start, Start + Length)
-  // Returns true if new pages are marked as containing code
-  bool AddBlockExecutableRange(uint64_t Address, uint64_t Start, uint64_t Length) {
-    std::lock_guard<std::recursive_mutex> lk(WriteLock);
-    
-    bool rv = false;
-
-    for (auto CurrentPage = Start >> 12, EndPage = (Start + Length -1) >> 12; CurrentPage <= EndPage; CurrentPage++) {
-      auto &CodePage = CodePages[CurrentPage];
-      rv |= CodePage.size() == 0;
-      CodePage.push_back(Address);
-    }
-
-    return rv;
-  }
-
   // Adds to Guest -> Host code mapping
   void AddBlockMapping(uint64_t Address, void *HostCode) {
     std::lock_guard<std::recursive_mutex> lk(WriteLock);
@@ -102,13 +84,6 @@ public:
   void Erase(uint64_t Address) {
 
     std::lock_guard<std::recursive_mutex> lk(WriteLock);
-
-    // Sever any links to this block
-    auto lower = BlockLinks.lower_bound({Address, 0});
-    auto upper = BlockLinks.upper_bound({Address, UINTPTR_MAX});
-    for (auto it = lower; it != upper; it = BlockLinks.erase(it)) {
-      it->second();
-    }
 
     // Remove from BlockList
     BlockList.erase(Address);
@@ -138,13 +113,6 @@ public:
     auto BlockPointers = reinterpret_cast<LookupCacheEntry*>(LocalPagePointer);
     BlockPointers[PageOffset].GuestCode = 0;
     BlockPointers[PageOffset].HostCode = 0;
-  }
-
-
-  void AddBlockLink(uint64_t GuestDestination, uintptr_t HostLink, const std::function<void()> &delinker) {
-    std::lock_guard<std::recursive_mutex> lk(WriteLock);
-
-    BlockLinks.insert({{GuestDestination, HostLink}, delinker});
   }
 
   void ClearCache();
@@ -223,22 +191,6 @@ private:
   uintptr_t PageMemory;
   uintptr_t L1Pointer;
 
-  struct BlockLinkTag {
-    uint64_t GuestDestination;
-    uintptr_t HostLink;
-
-    bool operator <(const BlockLinkTag& other) const {
-      if (GuestDestination < other.GuestDestination)
-        return true;
-      else if (GuestDestination == other.GuestDestination)
-        return HostLink < other.HostLink;
-      else
-        return false;
-    }
-  };
-
-
-  std::map<BlockLinkTag, std::function<void()>> BlockLinks;
   std::map<uint64_t, uint64_t> BlockList;
 
   constexpr static size_t CODE_SIZE = 128 * 1024 * 1024;

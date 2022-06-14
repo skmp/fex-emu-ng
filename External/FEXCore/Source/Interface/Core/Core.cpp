@@ -365,6 +365,7 @@ namespace FEXCore::Context {
       for (auto &Thread : Threads) {
         ClearCodeCache(Thread);
       }
+      // FEX_TODO CTX->BlockLinks
     }
     CoreRunningMode PreviousRunningMode = this->Config.RunningMode;
     int64_t PreviousMaxIntPerBlock = this->Config.MaxInstPerBlock;
@@ -720,7 +721,7 @@ namespace FEXCore::Context {
       bool HadDispatchError {false};
 
       Thread->FrontendDecoder->DecodeInstructionsAtEntry(GuestCode, GuestRIP, [Thread](uint64_t BlockEntry, uint64_t Start, uint64_t Length) {
-        if (Thread->LookupCache->AddBlockExecutableRange(BlockEntry, Start, Length)) {
+        if (Thread->CTX->AddBlockExecutableRange(BlockEntry, Start, Length)) {
           Thread->CTX->SyscallHandler->MarkGuestExecutableRange(Start, Length);
         }
       });
@@ -955,9 +956,23 @@ namespace FEXCore::Context {
     // Is the code in the cache?
     // The backends only check L1 and L2, not L3
     if (auto HostCode = Thread->LookupCache->FindBlock(GuestRIP)) {
+      //printf("CompileBlock OWN %lx\n", GuestRIP);
       return HostCode;
     }
+    
+    // Try to pull in from another thread
+    {
+      std::shared_lock lk(ThreadCreationMutex);
+      for (auto &OtherThread : Threads) {
+        if (auto BlockCode = OtherThread->LookupCache->FindBlock(GuestRIP)) {
+          //printf("CompileBlock OTHER %lx\n", GuestRIP);
+          Thread->LookupCache->AddBlockMapping(GuestRIP, (void*)BlockCode);
+          return BlockCode;
+        }
+      }
+    }
 
+    //printf("CompileBlock SLOW %lx\n", GuestRIP);
     void *CodePtr {};
     FEXCore::IR::IRListView *IRList {};
     FEXCore::Core::DebugData *DebugData {};
@@ -1101,32 +1116,49 @@ namespace FEXCore::Context {
     }
   }
 
-  static void InvalidateGuestThreadCodeRange(FEXCore::Core::InternalThreadState *Thread, uint64_t Start, uint64_t Length) {
-    std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
+  static void InvalidateGuestCodeRangeUnsafe(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length) {
+    //printf("InvalidateGuestCodeRangeUnsafe\n");
+    std::shared_lock lk(CTX->ThreadCreationMutex);
 
-    auto lower = Thread->LookupCache->CodePages.lower_bound(Start >> 12);
-    auto upper = Thread->LookupCache->CodePages.upper_bound((Start + Length - 1) >> 12);
+    {
+      std::lock_guard lk(CTX->CodePagesMutex);
 
-    for (auto it = lower; it != upper; it++) {
-      for (auto Address: it->second) {
-        Context::RemoveThreadCodeEntry(Thread, Address);
+      auto lower = CTX->CodePages.lower_bound(Start >> 12);
+      auto upper = CTX->CodePages.upper_bound((Start + Length - 1) >> 12);
+
+      for (auto it = lower; it != upper; it++) {
+        for (auto Address: it->second) {
+          for (auto &Thread : CTX->Threads) {
+            std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
+            Thread->LookupCache->Erase(Address);
+            Thread->DebugStore.erase(Address);
+          }
+          {
+            std::lock_guard lk(CTX->BlockLinksMutex);
+
+            // Sever any links to this block
+            auto lower = CTX->BlockLinks.lower_bound({Address, 0});
+            auto upper = CTX->BlockLinks.upper_bound({Address, UINTPTR_MAX});
+            for (auto it = lower; it != upper; it = CTX->BlockLinks.erase(it)) {
+              it->second();
+            }
+          }
+        }
+        it->second.clear();
       }
-      it->second.clear();
     }
   }
 
   void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length) {
-    std::shared_lock lk(CTX->ThreadCreationMutex);
-    
-    for (auto &Thread : CTX->Threads) {
-      InvalidateGuestThreadCodeRange(Thread, Start, Length);
-    }
+    std::unique_lock CodeInvalidationLock(CTX->CodeInvalidationMutex);
+
+    InvalidateGuestCodeRangeUnsafe(CTX, Start, Length);
   }
 
   void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length, std::function<void(uint64_t start, uint64_t Length)> CallAfter) {
     std::unique_lock CodeInvalidationLock(CTX->CodeInvalidationMutex);
 
-    InvalidateGuestCodeRange(CTX, Start, Length);
+    InvalidateGuestCodeRangeUnsafe(CTX, Start, Length);
     CallAfter(Start, Length);
   }
 
@@ -1156,11 +1188,30 @@ namespace FEXCore::Context {
     CTX->MarkMemoryShared();
   }
 
-  void Context::RemoveThreadCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
-    std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
+  // Appends Block {Address} to CodePages [Start, Start + Length)
+  // Returns true if new pages are marked as containing code
+  bool Context::AddBlockExecutableRange(uint64_t Address, uint64_t Start, uint64_t Length) {
+    std::lock_guard lk(CodePagesMutex);
+    
+    bool rv = false;
 
-    Thread->DebugStore.erase(GuestRIP);
-    Thread->LookupCache->Erase(GuestRIP);
+    for (auto CurrentPage = Start >> 12, EndPage = (Start + Length -1) >> 12; CurrentPage <= EndPage; CurrentPage++) {
+      auto &CodePage = CodePages[CurrentPage];
+      rv |= CodePage.size() == 0;
+      CodePage.push_back(Address);
+    }
+
+    return rv;
+  }
+
+  void Context::RemoveThreadCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
+    InvalidateGuestCodeRange(Thread->CTX, GuestRIP, 1);
+  }
+
+  void Context::AddBlockLink(uint64_t GuestDestination, uintptr_t HostLink, const std::function<void()> &delinker) {
+    std::lock_guard lk(BlockLinksMutex);
+
+    BlockLinks.insert({{GuestDestination, HostLink}, delinker});
   }
 
   bool Context::AddCustomIREntrypoint(uintptr_t Entrypoint, std::function<void(uintptr_t Entrypoint, FEXCore::IR::IREmitter *)> Handler) {

@@ -311,6 +311,29 @@ namespace FEXCore::Context {
 
     bool IsTSOEnabled() { return (IsMemoryShared || !Config.TSOAutoMigration) && Config.TSOEnabled; }
 
+    struct BlockLinkTag {
+      uint64_t GuestDestination;
+      uintptr_t HostLink;
+
+      bool operator <(const BlockLinkTag& other) const {
+        if (GuestDestination < other.GuestDestination)
+          return true;
+        else if (GuestDestination == other.GuestDestination)
+          return HostLink < other.HostLink;
+        else
+          return false;
+      }
+    };
+
+    void AddBlockLink(uint64_t GuestDestination, uintptr_t HostLink, const std::function<void()> &delinker);
+    bool AddBlockExecutableRange(uint64_t Address, uint64_t Start, uint64_t Length);
+
+    std::mutex BlockLinksMutex;
+    std::map<BlockLinkTag, std::function<void()>> BlockLinks;
+
+    std::mutex CodePagesMutex;
+    std::map<uint64_t, std::vector<uint64_t>> CodePages;
+
   protected:
     void ClearCodeCache(FEXCore::Core::InternalThreadState *Thread);
 

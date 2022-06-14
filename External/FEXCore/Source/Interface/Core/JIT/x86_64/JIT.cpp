@@ -569,7 +569,8 @@ void *X86JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IRLi
   // Fairly excessive buffer range to make sure we don't overflow
   uint32_t BufferRange = SSACount * 16;
   if ((getSize() + BufferRange) > CurrentCodeBuffer->Size) {
-    ThreadState->CTX->ClearCodeCache(ThreadState);
+    //ThreadState->CTX->ClearCodeCache(ThreadState);
+    ClearCache();
   }
 
 	void *GuestEntry = getCurr<void*>();
@@ -744,7 +745,7 @@ static uint64_t X86JITCore_ExitFunctionLink(FEXCore::Core::CpuStateFrame *Frame,
   }
 
   auto LinkerAddress = Frame->Pointers.Common.ExitFunctionLinker;
-  Thread->LookupCache->AddBlockLink(GuestRip, (uintptr_t)record, [record, LinkerAddress]{
+  Thread->CTX ->AddBlockLink(GuestRip, (uintptr_t)record, [record, LinkerAddress]{
     // undo the link
     record[0] = LinkerAddress;
   });

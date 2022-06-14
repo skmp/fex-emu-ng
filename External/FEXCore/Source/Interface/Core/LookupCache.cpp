@@ -68,7 +68,7 @@ void LookupCache::ClearCache() {
   // Clear L2
   ClearL2Cache();
   // All code is gone, remove links
-  BlockLinks.clear();
+  //BlockLinks.clear();
   // All code is gone, clear the block list
   BlockList.clear();
 }

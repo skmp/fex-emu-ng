@@ -642,7 +642,8 @@ void *Arm64JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IR
   // Fairly excessive buffer range to make sure we don't overflow
   uint32_t BufferRange = SSACount * 16;
   if ((GetCursorOffset() + BufferRange) > CurrentCodeBuffer->Size) {
-    ThreadState->CTX->ClearCodeCache(ThreadState);
+    //ThreadState->CTX->ClearCodeCache(ThreadState);
+    ClearCache();
   }
 
   // AAPCS64
@@ -790,7 +791,7 @@ static uint64_t Arm64JITCore_ExitFunctionLink(FEXCore::Core::CpuStateFrame *Fram
     vixl::aarch64::CPU::EnsureIAndDCacheCoherency((void*)branch, 24);
 
     // Add de-linking handler
-    Thread->LookupCache->AddBlockLink(GuestRip, (uintptr_t)record, [branch, LinkerAddress]{
+    Thread->CTX->AddBlockLink(GuestRip, (uintptr_t)record, [branch, LinkerAddress]{
       vixl::aarch64::Assembler emit((uint8_t*)(branch), 24);
       vixl::CodeBufferCheckScope scope(&emit, 24, vixl::CodeBufferCheckScope::kDontReserveBufferSpace, vixl::CodeBufferCheckScope::kNoAssert);
       Literal l_BranchHost{LinkerAddress};
@@ -805,7 +806,7 @@ static uint64_t Arm64JITCore_ExitFunctionLink(FEXCore::Core::CpuStateFrame *Fram
     record[0] = HostCode;
 
     // Add de-linking handler
-    Thread->LookupCache->AddBlockLink(GuestRip, (uintptr_t)record, [record, LinkerAddress]{
+    Thread->CTX->AddBlockLink(GuestRip, (uintptr_t)record, [record, LinkerAddress]{
       record[0] = LinkerAddress;
     });
   }
