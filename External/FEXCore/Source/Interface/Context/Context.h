@@ -112,7 +112,7 @@ namespace FEXCore::Context {
 
     FEXCore::HostFeatures HostFeatures;
 
-    std::mutex ThreadCreationMutex;
+    std::shared_mutex ThreadCreationMutex;
     uint64_t ThreadID{};
     FEXCore::Core::InternalThreadState* ParentThread;
     std::vector<FEXCore::Core::InternalThreadState*> Threads;
