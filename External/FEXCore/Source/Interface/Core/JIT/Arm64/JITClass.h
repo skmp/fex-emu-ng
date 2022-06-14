@@ -54,10 +54,6 @@ public:
 
   void ClearCache() override;
 
-  bool IsAddressInJITCode(uint64_t Address, bool IncludeDispatcher = true) const override {
-    return Dispatcher->IsAddressInJITCode(Address, IncludeDispatcher);
-  }
-
   static void InitializeSignalHandlers(FEXCore::Context::Context *CTX);
 
   void ClearRelocations() override { Relocations.clear(); }
@@ -140,8 +136,6 @@ private:
 #if DEBUG
   vixl::aarch64::Disassembler Disasm;
 #endif
-
-  static uint64_t ExitFunctionLink(Arm64JITCore *core, FEXCore::Core::CpuStateFrame *Frame, uint64_t *record);
 
   // This is purely a debugging aid for developers to see if they are in JIT code space when inspecting raw memory
   void EmitDetectionString();
