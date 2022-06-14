@@ -310,7 +310,7 @@ namespace FEXCore::Context {
   void Context::NotifyPause() {
 
     // Tell all the threads that they should pause
-    std::lock_guard<std::mutex> lk(ThreadCreationMutex);
+    std::shared_lock lk(ThreadCreationMutex);
     for (auto &Thread : Threads) {
       Thread->SignalReason.store(FEXCore::Core::SignalEvent::Pause);
       if (Thread->RunningEvents.Running.load()) {
@@ -331,7 +331,7 @@ namespace FEXCore::Context {
 
   void Context::Run() {
     // Spin up all the threads
-    std::lock_guard<std::mutex> lk(ThreadCreationMutex);
+    std::shared_lock lk(ThreadCreationMutex);
     for (auto &Thread : Threads) {
       Thread->SignalReason.store(FEXCore::Core::SignalEvent::Return);
     }
@@ -344,7 +344,7 @@ namespace FEXCore::Context {
   void Context::WaitForThreadsToRun() {
     size_t NumThreads{};
     {
-      std::lock_guard<std::mutex> lk(ThreadCreationMutex);
+      std::shared_lock lk(ThreadCreationMutex);
       NumThreads = Threads.size();
     }
 
@@ -359,7 +359,7 @@ namespace FEXCore::Context {
 
   void Context::Step() {
     {
-      std::lock_guard<std::mutex> lk(ThreadCreationMutex);
+      std::shared_lock lk(ThreadCreationMutex);
       // Walk the threads and tell them to clear their caches
       // Useful when our block size is set to a large number and we need to step a single instruction
       for (auto &Thread : Threads) {
@@ -383,7 +383,7 @@ namespace FEXCore::Context {
 
     // Tell all the threads that they should stop
     {
-      std::lock_guard<std::mutex> lk(ThreadCreationMutex);
+      std::shared_lock lk(ThreadCreationMutex);
       for (auto &Thread : Threads) {
         if (IgnoreCurrentThread &&
             Thread->ThreadManager.TID == tid) {
@@ -432,7 +432,7 @@ namespace FEXCore::Context {
   FEXCore::Context::ExitReason Context::RunUntilExit() {
     if(!StartPaused) {
       // We will only have one thread at this point, but just in case run notify everything
-      std::lock_guard lk(ThreadCreationMutex);
+      std::shared_lock lk(ThreadCreationMutex);
       for (auto &Thread : Threads) {
         Thread->StartRunning.NotifyAll();
       }
@@ -561,7 +561,7 @@ namespace FEXCore::Context {
 
     // Insert after the Thread object has been fully initialized
     {
-      std::lock_guard<std::mutex> lk(ThreadCreationMutex);
+      std::lock_guard lk(ThreadCreationMutex);
       Threads.push_back(Thread);
     }
 
@@ -571,7 +571,7 @@ namespace FEXCore::Context {
   void Context::DestroyThread(FEXCore::Core::InternalThreadState *Thread) {
     // remove new thread object
     {
-      std::lock_guard<std::mutex> lk(ThreadCreationMutex);
+      std::lock_guard lk(ThreadCreationMutex);
 
       auto It = std::find(Threads.begin(), Threads.end(), Thread);
       LOGMAN_THROW_A_FMT(It != Threads.end(), "Thread wasn't in Threads");
@@ -1116,7 +1116,7 @@ namespace FEXCore::Context {
   }
 
   void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length) {
-    std::lock_guard lk(CTX->ThreadCreationMutex);
+    std::shared_lock lk(CTX->ThreadCreationMutex);
     
     for (auto &Thread : CTX->Threads) {
       InvalidateGuestThreadCodeRange(Thread, Start, Length);
@@ -1137,7 +1137,7 @@ namespace FEXCore::Context {
       if (Config.TSOAutoMigration) {
         LogMan::Msg::IFmt("Migrating to shared memory mode");
 
-        std::lock_guard<std::mutex> lkThreads(ThreadCreationMutex);
+        std::lock_guard lkThreads(ThreadCreationMutex);
         LogMan::Throw::AFmt(Threads.size() == 1, "First MarkMemoryShared called must be before creating any threads");
 
         auto Thread = Threads[0];
