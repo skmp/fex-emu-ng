@@ -83,7 +83,7 @@ namespace FEXCore {
 
             LogMan::Msg::DFmt("Thunks: Adding GCH trampoline to guest function {:#x} at addr {:#x}", args->guest_addr, args->host_addr);
             
-            Thread->CTX->AddCustomIREntrypoint(args->host_addr, [CTX, GuestThunkEntrypoint = args->host_addr]
+            auto Result = Thread->CTX->AddCustomIREntrypoint(args->host_addr, [CTX, GuestThunkEntrypoint = args->guest_addr]
                 (uintptr_t Entrypoint, FEXCore::IR::IREmitter *emit) {
 
                 auto IRHeader = emit->_IRHeader(emit->Invalid(), 0);
@@ -95,7 +95,13 @@ namespace FEXCore {
 
                 emit->_StoreContext(GPRSize, IR::GPRClass, emit->_Constant(Entrypoint), offsetof(Core::CPUState, gregs[X86State::REG_R11]));
                 emit->_ExitFunction(emit->_Constant(GuestThunkEntrypoint));
-            });
+            }, CTX->ThunkHandler.get(), (void*)args->guest_addr);
+
+            if (!Result) {
+                if (Result.Creator != CTX->ThunkHandler.get() || Result.Data != (void*)args->guest_addr) {
+                    ERROR_AND_DIE_FMT("MakeHostFunctionGuestCallable with differing arguments called");
+                }
+            }
         }
 
         static void LoadLib(void *ArgsV) {
