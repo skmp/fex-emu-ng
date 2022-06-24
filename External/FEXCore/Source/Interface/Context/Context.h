@@ -108,6 +108,7 @@ namespace FEXCore::Context {
       FEX_CONFIG_OPT(StaticRegisterAllocation, SRA);
       FEX_CONFIG_OPT(GlobalJITNaming, GLOBALJITNAMING);
       FEX_CONFIG_OPT(LibraryJITNaming, LIBRARYJITNAMING);
+      FEX_CONFIG_OPT(FragmentJITNaming, FRAGMENTJITNAMING);
       FEX_CONFIG_OPT(BlockJITNaming, BLOCKJITNAMING);
       FEX_CONFIG_OPT(GDBSymbols, GDBSYMBOLS);
       FEX_CONFIG_OPT(ParanoidTSO, PARANOIDTSO);

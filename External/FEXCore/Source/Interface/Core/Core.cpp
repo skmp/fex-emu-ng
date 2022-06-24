@@ -1010,26 +1010,45 @@ namespace FEXCore::Context {
     }
 
     // The core managed to compile the code.
-    if (Config.BlockJITNaming()) {
+
+    // Register the compiled fragment to Symbols for perf integration
+    if (Config.FragmentJITNaming() || Config.BlockJITNaming()) {
       auto FragmentBasePtr = reinterpret_cast<uint8_t *>(CodePtr);
 
       if (DebugData) {
         auto GuestRIPLookup = SyscallHandler->LookupAOTIRCacheEntry(GuestRIP);
+        auto FileOffset = GuestRIP - GuestRIPLookup.VAFileStart;
 
-        if (DebugData->Subblocks.size()) {
+        if (Config.BlockJITNaming() && DebugData->Subblocks.size()) {
           for (auto& Subblock: DebugData->Subblocks) {
             auto BlockBasePtr = FragmentBasePtr + Subblock.HostCodeOffset;
             if (GuestRIPLookup.Entry) {
-              Symbols.Register(BlockBasePtr, DebugData->HostCodeSize, GuestRIPLookup.Entry->Filename, GuestRIP - GuestRIPLookup.VAFileStart);
+              if (GuestRIPLookup.Entry->SourcecodeMap) {
+                auto Sym = GuestRIPLookup.Entry->SourcecodeMap->FindSymbolMapping(FileOffset);
+
+                std::string SymName = HLE::SourcecodeSymbolMapping::SymName(Sym, GuestRIPLookup.Entry->Filename, (uintptr_t)BlockBasePtr, FileOffset /*+ Subblock.GuestCodeOffset*/);
+
+                Symbols.Register(BlockBasePtr, Subblock.HostCodeSize, SymName, Subblock.HostCodeOffset /*+ Subblock.GuestCodeOffset*/);
+              } else {
+                Symbols.Register(BlockBasePtr, Subblock.HostCodeSize, GuestRIPLookup.Entry->Filename, FileOffset /*+ Subblock.GuestCodeOffset*/);
+              }
             } else {
               Symbols.Register(BlockBasePtr, GuestRIP, Subblock.HostCodeSize);
             }
           }
         } else {
           if (GuestRIPLookup.Entry) {
-            Symbols.Register(FragmentBasePtr, DebugData->HostCodeSize, GuestRIPLookup.Entry->Filename, GuestRIP - GuestRIPLookup.VAFileStart);
-        } else {
-          Symbols.Register(FragmentBasePtr, GuestRIP, DebugData->HostCodeSize);
+            if (GuestRIPLookup.Entry->SourcecodeMap) {
+              auto Sym = GuestRIPLookup.Entry->SourcecodeMap->FindSymbolMapping(FileOffset);
+
+              std::string SymName = HLE::SourcecodeSymbolMapping::SymName(Sym, GuestRIPLookup.Entry->Filename, (uintptr_t)FragmentBasePtr, FileOffset);
+
+              Symbols.Register(FragmentBasePtr, DebugData->HostCodeSize, SymName);
+            } else {
+              Symbols.Register(FragmentBasePtr, DebugData->HostCodeSize, GuestRIPLookup.Entry->Filename, FileOffset);
+            }
+          } else {
+            Symbols.Register(FragmentBasePtr, GuestRIP, DebugData->HostCodeSize);
           }
         }
       }

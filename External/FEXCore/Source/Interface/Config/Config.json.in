@@ -200,11 +200,20 @@
           "Can be used to help guide thunk generation"
         ]
       },
+      "FragmentJITNaming": {
+        "Type": "bool",
+        "Default": "false",
+        "Desc": [
+          "Uses JITSymbols to name JIT symbols grouped by compilation fragment",
+          "Useful for determining hot blocks of code",
+          "Has some file writing overhead per JIT block"
+        ]
+      },
       "BlockJITNaming": {
         "Type": "bool",
         "Default": "false",
         "Desc": [
-          "Uses JITSymbols to name JIT symbols",
+          "Uses JITSymbols to name JIT symbols grouped by by compilation block",
           "Useful for determining hot blocks of code",
           "Has some file writing overhead per JIT block"
         ]
