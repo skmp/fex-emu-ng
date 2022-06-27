@@ -98,7 +98,7 @@ namespace {
     std::unordered_map<IR::NodeID, std::unordered_set<IR::NodeID>> VisitedNodePredecessors;
   };
 
-  void ResetRegisterGraph(RegisterGraph *Graph, uint64_t NodeCount);
+  void ResetRegisterGraph(RegisterGraph *Graph, size_t NodeCount, size_t MaxArgCount);
 
   RegisterGraph *AllocateRegisterGraph(uint32_t ClassCount) {
     RegisterGraph *Graph = new RegisterGraph{};
@@ -108,7 +108,7 @@ namespace {
     Graph->Set.Classes.resize(ClassCount);
 
     // Allocate default nodes
-    ResetRegisterGraph(Graph, DEFAULT_NODE_COUNT);
+    ResetRegisterGraph(Graph, DEFAULT_NODE_COUNT, DEFAULT_NODE_COUNT);
     return Graph;
   }
 
@@ -144,7 +144,7 @@ namespace {
     delete Graph;
   }
 
-  void ResetRegisterGraph(RegisterGraph *Graph, uint64_t NodeCount) {
+  void ResetRegisterGraph(RegisterGraph *Graph, size_t NodeCount, size_t MaxArgCount) {
     NodeCount = FEXCore::AlignUp(NodeCount, REGISTER_NODES_PER_PAGE);
 
     // Clear to free the Bucketlists which have unique_ptrs
@@ -1468,8 +1468,9 @@ namespace {
     auto IR = IREmit->ViewIR();
 
     uint32_t SSACount = IR.GetSSACount();
+    auto MaxSSAArgs = IR.GetMaxSSAArgsCount();
 
-    ResetRegisterGraph(Graph, SSACount);
+    ResetRegisterGraph(Graph, SSACount, MaxSSAArgs);
     FindNodeClasses(Graph, &IR);
     CalculateLiveRange(&IR);
     if (OptimizeSRA)

@@ -220,6 +220,7 @@ public:
   [[nodiscard]] size_t GetDataSize() const { return DataSize; }
   [[nodiscard]] size_t GetListSize() const { return ListSize; }
   [[nodiscard]] size_t GetSSACount() const { return ListSize / sizeof(OrderedNode); }
+  [[nodiscard]] size_t GetMaxSSAArgsCount() const { return GetDataSize() - GetSSACount() * sizeof(IROp_Header); }
 
   [[nodiscard]] bool IsCopy() const {
     return (Flags & FLAG_IsCopy) != 0;
