@@ -72,7 +72,11 @@ inline Result CallHostThunkFromRuntimePointer(Args... args) {
     uintptr_t host_addr = 0;
 #endif
 
-    PackedArguments<Result, Args..., uintptr_t> packed_args = {
+    <result, args...>
+    struct thunks {
+        using args_rv_t = PackerArgs<results, args>;
+    }
+    thunks<Result(Args...)>::argsrv_t packed_args = {
         args...,
         host_addr
         // Return value not explicitly initialized since an initializer would fail to compile for the void case

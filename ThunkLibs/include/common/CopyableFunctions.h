@@ -12,6 +12,16 @@
 
 #include <sys/mman.h>
 
+__asm__("
+    mov r11, myData+0(%rip);
+    mov r12, myData+8(%rip);
+    jmp r12;
+
+    myData:
+        .q `guest_fn`
+        .q `marshaler_fn`
+");
+
 // Copyable functions
 
 // Public API
