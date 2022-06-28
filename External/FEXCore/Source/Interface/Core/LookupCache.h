@@ -67,8 +67,6 @@ public:
     return 0;
   }
 
-  std::map<uint64_t, std::vector<uint64_t>> CodePages;
-
   // Appends Block {Address} to CodePages [Start, Start + Length)
   // Returns true if new pages are marked as containing code
   bool AddBlockExecutableRange(uint64_t Address, uint64_t Start, uint64_t Length) {
@@ -238,8 +236,10 @@ private:
   };
 
 
-  std::map<BlockLinkTag, std::function<void()>> BlockLinks;
-  std::map<uint64_t, uint64_t> BlockList;
+  std::map<uint64_t, std::vector<uint64_t>> GuestPageToBlockGuest;
+  std::multimap<uint64_t, std::function<void()>> BlockGuestToDelinker;
+  std::map<uint64_t, uintptr_t> BlockGuestToHost;
+  std::map<uintptr_t, uint64_t> BlockHostToGuest;
 
   constexpr static size_t CODE_SIZE = 128 * 1024 * 1024;
   constexpr static size_t SIZE_PER_PAGE = 4096 * sizeof(LookupCacheEntry);
