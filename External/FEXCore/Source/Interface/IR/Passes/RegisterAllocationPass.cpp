@@ -30,6 +30,98 @@ $end_info$
 #include <utility>
 #include <vector>
 
+// vreg <reg_class>:<reg_num> (8 bits)
+// pregs (64 bits)
+// vreg_to_pregs[vreg]
+
+// reg alloc storage
+// 8 bits per param, 8 bits for self
+
+// per span
+//   value
+//   start
+//   end
+
+// definition (value, start) or
+// use (value, {prev end, next start})
+// next end
+
+// during the linear pass we need
+// number of alive spans per register category
+/*
+
+for each op {
+  pre-alloc result according to constrains
+  pre-alloc params according to constrains
+    mark any params <-> span miss matches
+  
+  if (result span + input spans + live spans > max spans) {
+    // spill
+  }
+
+  We don't know if a value is dead or not
+  We don't know if a value is global or not
+
+  pre-pass
+  - generate live range events
+
+  Event
+   block start { block ssa id, imports list }
+   value definition: { span lid, ssa id, next_use, is_last }
+   value use: { span lid, ssa id, next_use, is_last }
+   block end { block ssa id, exports list }
+
+  span local ids
+   register span
+}
+*/
+
+#if 1
+namespace FEXCore::IR {
+
+  class LinearRAPass final : public RegisterAllocationPass {
+
+      bool OptimiseSRA;
+
+      LinearRAPass(bool OptimiseSRA): OptimiseSRA(OptimiseSRA) {
+
+      }
+      
+      bool Run(IREmitter *IREmit) override {
+        return false;
+      }
+
+      void AllocateRegisterSet(uint32_t RegisterCount, uint32_t ClassCount) override {
+
+      }
+
+      void AddRegisters(FEXCore::IR::RegisterClassType Class, uint32_t RegisterCount) override {
+
+      }
+
+      void AddRegisterConflict(FEXCore::IR::RegisterClassType ClassConflict, uint32_t RegConflict, FEXCore::IR::RegisterClassType Class, uint32_t Reg) override {
+
+      }
+
+      /**
+       * @brief Returns the register and class encoded together
+       * Top 32bits is the class, lower 32bits is the register
+       */
+      RegisterAllocationData* GetAllocationData() override {
+
+        return nullptr;
+      }
+
+      RegisterAllocationData::UniquePtr PullAllocationData() override {
+        return nullptr;
+      }
+  };
+
+  std::unique_ptr<FEXCore::IR::RegisterAllocationPass> CreateRegisterAllocationPass(FEXCore::IR::Pass* CompactionPass, bool OptimizeSRA) {
+    return std::make_unique<LinearRAPass>(OptimizeSRA);
+  }
+}
+#else
 #define SRA_DEBUG(...) // fmt::print(__VA_ARGS__)
 
 namespace FEXCore::IR {
@@ -1544,3 +1636,5 @@ namespace {
     return std::make_unique<ConstrainedRAPass>(CompactionPass, OptimizeSRA);
   }
 }
+
+#endif

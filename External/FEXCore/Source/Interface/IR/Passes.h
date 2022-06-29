@@ -18,7 +18,7 @@ std::unique_ptr<FEXCore::IR::Pass> CreateDeadFlagCalculationEliminination();
 std::unique_ptr<FEXCore::IR::Pass> CreateDeadStoreElimination();
 std::unique_ptr<FEXCore::IR::Pass> CreatePassDeadCodeElimination();
 std::unique_ptr<FEXCore::IR::Pass> CreateIRCompaction(FEXCore::Utils::IntrusivePooledAllocator &Allocator);
-std::unique_ptr<FEXCore::IR::RegisterAllocationPass> CreateRegisterAllocationPass(FEXCore::IR::Pass* CompactionPass, bool OptimizeSRA);
+std::unique_ptr<FEXCore::IR::RegisterAllocationPass> CreateRegisterAllocationPass(bool OptimizeSRA);
 std::unique_ptr<FEXCore::IR::Pass> CreateStaticRegisterAllocationPass();
 std::unique_ptr<FEXCore::IR::Pass> CreateLongDivideEliminationPass();
 

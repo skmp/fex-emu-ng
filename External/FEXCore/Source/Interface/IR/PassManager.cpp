@@ -47,9 +47,12 @@ void PassManager::AddDefaultPasses(FEXCore::Context::Context *ctx, bool InlineCo
       InsertPass(CreateStaticRegisterAllocationPass());
   }
 
+  // reworked ra doesn't need compaction
+  #if 0
   // If the IR is compacted post-RA then the node indexing gets messed up and the backend isn't able to find the register assigned to a node
   // Compact before IR, don't worry about RA generating spills/fills
   InsertPass(CreateIRCompaction(ctx->OpDispatcherAllocator), "Compaction");
+  #endif
 }
 
 void PassManager::AddDefaultValidationPasses() {
@@ -62,7 +65,8 @@ void PassManager::AddDefaultValidationPasses() {
 }
 
 void PassManager::InsertRegisterAllocationPass(bool OptimizeSRA) {
-  InsertPass(IR::CreateRegisterAllocationPass(GetPass("Compaction"), OptimizeSRA), "RA");
+  // reworked ra doesn't need compaction
+  InsertPass(IR::CreateRegisterAllocationPass(/*GetPass("Compaction"), */OptimizeSRA), "RA");
 }
 
 bool PassManager::Run(IREmitter *IREmit) {
