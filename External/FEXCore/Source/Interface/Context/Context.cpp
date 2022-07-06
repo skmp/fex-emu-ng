@@ -1,4 +1,5 @@
 #include "Common/Paths.h"
+#include "FEXCore/Core/NamedRegion.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/Core.h"
 #include "Interface/Core/OpcodeDispatcher.h"
@@ -191,11 +192,11 @@ namespace FEXCore::Context {
     CTX->WriteFilesWithCode(Writer);
   }
 
-  IR::AOTIRCacheEntry *LoadAOTIRCacheEntry(FEXCore::Context::Context *CTX, const std::string &Name) {
-    return CTX->LoadAOTIRCacheEntry(Name);
+  Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string &Name) {
+    return CTX->LoadNamedRegion(Name);
   }
-  void UnloadAOTIRCacheEntry(FEXCore::Context::Context *CTX, IR::AOTIRCacheEntry *Entry) {
-    return CTX->UnloadAOTIRCacheEntry(Entry);
+  void UnloadNamedRegion(FEXCore::Context::Context *CTX, Core::NamedRegion *Entry) {
+    return CTX->UnloadNamedRegion(Entry);
   }
 
   CustomIRResult AddCustomIREntrypoint(FEXCore::Context::Context *CTX, uintptr_t Entrypoint, std::function<void(uintptr_t Entrypoint, FEXCore::IR::IREmitter *)> Handler, void *Creator, void *Data) {

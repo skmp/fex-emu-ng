@@ -22,6 +22,7 @@ namespace FEXCore {
 namespace FEXCore::Core {
   struct CPUState;
   struct InternalThreadState;
+  struct NamedRegion;
 }
 
 namespace FEXCore::CPU {
@@ -35,7 +36,6 @@ namespace FEXCore::HLE {
 }
 
 namespace FEXCore::IR {
-  struct AOTIRCacheEntry;
   class IREmitter;
 }
 
@@ -265,8 +265,8 @@ namespace FEXCore::Context {
   FEX_DEFAULT_VISIBILITY FEXCore::CPUID::FunctionResults RunCPUIDFunction(FEXCore::Context::Context *CTX, uint32_t Function, uint32_t Leaf);
   FEX_DEFAULT_VISIBILITY FEXCore::CPUID::FunctionResults RunCPUIDFunctionName(FEXCore::Context::Context *CTX, uint32_t Function, uint32_t Leaf, uint32_t CPU);
 
-  FEX_DEFAULT_VISIBILITY FEXCore::IR::AOTIRCacheEntry *LoadAOTIRCacheEntry(FEXCore::Context::Context *CTX, const std::string& Name);
-  FEX_DEFAULT_VISIBILITY void UnloadAOTIRCacheEntry(FEXCore::Context::Context *CTX, FEXCore::IR::AOTIRCacheEntry *Entry);
+  FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string& Name);
+  FEX_DEFAULT_VISIBILITY void UnloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *Entry);
 
   FEX_DEFAULT_VISIBILITY void SetAOTIRLoader(FEXCore::Context::Context *CTX, std::function<int(const std::string&)> CacheReader);
   FEX_DEFAULT_VISIBILITY void SetAOTIRWriter(FEXCore::Context::Context *CTX, std::function<std::unique_ptr<std::ofstream>(const std::string&)> CacheWriter);
