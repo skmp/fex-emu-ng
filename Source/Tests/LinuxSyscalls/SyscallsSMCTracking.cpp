@@ -12,6 +12,7 @@ $end_info$
 #include <sys/shm.h>
 #include <sys/mman.h>
 
+#include "FEXCore/Core/Context.h"
 #include "Tests/LinuxSyscalls/Syscalls.h"
 
 #include <FEXHeaderUtils/TypeDefines.h>
@@ -162,9 +163,9 @@ void SyscallHandler::MarkGuestExecutableRange(uint64_t Start, uint64_t Length) {
 }
 
 // Used for AOT
-FEXCore::HLE::AOTIRCacheEntryLookupResult SyscallHandler::LookupAOTIRCacheEntry(uint64_t GuestAddr) {
+FEXCore::HLE::NamedRegionLookupResult SyscallHandler::LookupNamedRegion(uint64_t GuestAddr) {
   FHU::ScopedSignalMaskWithSharedLock lk(_SyscallHandler->VMATracking.Mutex);
-  auto rv = FEXCore::HLE::AOTIRCacheEntryLookupResult(nullptr, 0, std::move(lk));
+  auto rv = FEXCore::HLE::NamedRegionLookupResult(nullptr, 0, std::move(lk));
 
   // Get the first mapping after GuestAddr, or end
   // GuestAddr is inclusive
@@ -205,7 +206,7 @@ void SyscallHandler::TrackMmap(uintptr_t Base, uintptr_t Size, int Prot, int Fla
       if (Inserted) {
         auto filename = FEX::get_fdpath(fd);
 
-        Resource->AOTIRCacheEntry = FEXCore::Context::LoadAOTIRCacheEntry(CTX, filename);
+        Resource->NamedRegion = FEXCore::Context::LoadNamedRegion(CTX, filename);
         Resource->Iterator = Iter;
       }
 

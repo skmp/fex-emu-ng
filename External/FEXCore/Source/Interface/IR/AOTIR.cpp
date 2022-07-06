@@ -243,7 +243,7 @@ namespace FEXCore::IR {
   }
 
   AOTIRCaptureCache::PreGenerateIRFetchResult AOTIRCaptureCache::PreGenerateIRFetch(uint64_t GuestRIP, FEXCore::IR::IRListView *IRList) {
-    auto AOTIRCacheEntry = CTX->SyscallHandler->LookupAOTIRCacheEntry(GuestRIP);
+    auto AOTIRCacheEntry = CTX->SyscallHandler->LookupNamedRegion(GuestRIP);
 
     PreGenerateIRFetchResult Result{};
 
@@ -297,7 +297,7 @@ namespace FEXCore::IR {
     // Both generated ir and LibraryJITName need a named region lookup
     if (GeneratedIR || CTX->Config.LibraryJITNaming() || CTX->Config.GDBSymbols()) {
 
-      auto AOTIRCacheEntry = CTX->SyscallHandler->LookupAOTIRCacheEntry(GuestRIP);
+      auto AOTIRCacheEntry = CTX->SyscallHandler->LookupNamedRegion(GuestRIP);
 
       if (AOTIRCacheEntry.Entry) {
         if (DebugData && CTX->Config.LibraryJITNaming()) {

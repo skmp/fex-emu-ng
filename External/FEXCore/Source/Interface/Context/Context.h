@@ -35,6 +35,9 @@ namespace FEXCore {
 class CodeLoader;
 class ThunkHandler;
 class GdbServer;
+namespace Core {
+  struct NamedRegion;
+}
 
 namespace CodeSerialize {
   class CodeObjectSerializeService;
@@ -277,8 +280,8 @@ namespace FEXCore::Context {
 
     uint8_t GetGPRSize() const { return Config.Is64BitMode ? 8 : 4; }
 
-    IR::AOTIRCacheEntry *LoadAOTIRCacheEntry(const std::string &filename);
-    void UnloadAOTIRCacheEntry(IR::AOTIRCacheEntry *Entry);
+    FEXCore::Core::NamedRegion *LoadNamedRegion(const std::string &filename);
+    void UnloadNamedRegion(FEXCore::Core::NamedRegion *Entry);
 
     FEXCore::JITSymbols Symbols;
 

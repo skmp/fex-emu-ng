@@ -8,6 +8,7 @@ $end_info$
 */
 
 #include <cstdint>
+#include "FEXCore/Core/NamedRegion.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/LookupCache.h"
 #include "Interface/Core/Core.h"
@@ -915,7 +916,7 @@ namespace FEXCore::Context {
     }
 
     if (SourcecodeResolver && Config.GDBSymbols()) {
-      auto AOTIRCacheEntry = SyscallHandler->LookupAOTIRCacheEntry(GuestRIP);
+      auto AOTIRCacheEntry = SyscallHandler->LookupNamedRegion(GuestRIP);
       if (AOTIRCacheEntry.Entry && !AOTIRCacheEntry.Entry->ContainsCode) {
         AOTIRCacheEntry.Entry->SourcecodeMap =
             SourcecodeResolver->GenerateMap(AOTIRCacheEntry.Entry->Filename, AOTIRCacheEntry.Entry->FileId);
@@ -1016,7 +1017,7 @@ namespace FEXCore::Context {
       auto FragmentBasePtr = reinterpret_cast<uint8_t *>(CodePtr);
 
       if (DebugData) {
-        auto GuestRIPLookup = SyscallHandler->LookupAOTIRCacheEntry(GuestRIP);
+        auto GuestRIPLookup = SyscallHandler->LookupNamedRegion(GuestRIP);
 
         if (DebugData->Subblocks.size()) {
           for (auto& Subblock: DebugData->Subblocks) {
@@ -1273,7 +1274,7 @@ namespace FEXCore::Context {
     return Result;
   }
 
-  IR::AOTIRCacheEntry *Context::LoadAOTIRCacheEntry(const std::string &filename) {
+  Core::NamedRegion *Context::LoadNamedRegion(const std::string &filename) {
     auto rv = IRCaptureCache.LoadAOTIRCacheEntry(filename);
     if (DebugServer) {
       DebugServer->AlertLibrariesChanged();
@@ -1281,7 +1282,7 @@ namespace FEXCore::Context {
     return rv;
   }
 
-  void Context::UnloadAOTIRCacheEntry(IR::AOTIRCacheEntry *Entry) {
+  void Context::UnloadNamedRegion(Core::NamedRegion *Entry) {
     IRCaptureCache.UnloadAOTIRCacheEntry(Entry);
     if (DebugServer) {
       DebugServer->AlertLibrariesChanged();

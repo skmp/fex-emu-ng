@@ -13,7 +13,7 @@ $end_info$
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <FEXCore/HLE/SourcecodeResolver.h>
-#include <FEXCore/IR/IR.h>
+#include <FEXCore/Core/NamedRegion.h>
 #include <FEXCore/Utils/CompilerDefs.h>
 
 #include <mutex>
@@ -187,8 +187,8 @@ public:
   ///// VMA (Virtual Memory Area) tracking /////
   static bool HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext);
   void MarkGuestExecutableRange(uint64_t Start, uint64_t Length) override;
-  // AOTIRCacheEntryLookupResult also includes a shared lock guard, so the pointed AOTIRCacheEntry return can be safely used
-  FEXCore::HLE::AOTIRCacheEntryLookupResult LookupAOTIRCacheEntry(uint64_t GuestAddr) final override;
+  // NamedRegionLookupResult also includes a shared lock guard, so the pointed AOTIRCacheEntry return can be safely used
+  FEXCore::HLE::NamedRegionLookupResult LookupNamedRegion(uint64_t GuestAddr) final override;
 
   ///// FORK tracking /////
   void LockBeforeFork();
@@ -256,7 +256,7 @@ private:
   struct MappedResource {
     using ContainerType = std::map<MRID, MappedResource>;
 
-    FEXCore::IR::AOTIRCacheEntry *AOTIRCacheEntry;
+    FEXCore::Core::NamedRegion *NamedRegion;
     VMAEntry *FirstVMA;
     uint64_t Length; // 0 if not fixed size
     ContainerType::iterator Iterator;

@@ -76,13 +76,9 @@ namespace FEXCore::IR {
     AOTIRInlineIndex *Array;
     void *FilePtr;
     size_t Size;
-    std::unique_ptr<FEXCore::HLE::SourcecodeMap> SourcecodeMap;
-    std::string FileId;
-    std::string Filename;
-    bool ContainsCode;
   };
 
-  using AOTCacheType = std::unordered_map<std::string, FEXCore::IR::AOTIRCacheEntry>;
+  using AOTCacheType = std::unordered_map<std::string, FEXCore::Core::NamedRegion>;
 
   class AOTIRCaptureCache final {
     public:
@@ -102,9 +98,9 @@ namespace FEXCore::IR {
         uint64_t Length {};
         bool GeneratedIR {};
       };
-      [[nodiscard]] PreGenerateIRFetchResult PreGenerateIRFetch(uint64_t GuestRIP, FEXCore::IR::IRListView *IRList);
+      [[nodiscard]] PreGenerateIRFetchResult LoadIR(uint64_t GuestRIP);
 
-      bool PostCompileCode(FEXCore::Core::InternalThreadState *Thread,
+      bool CacheIR(FEXCore::Core::InternalThreadState *Thread,
         void* CodePtr,
         uint64_t GuestRIP,
         uint64_t StartAddr,
