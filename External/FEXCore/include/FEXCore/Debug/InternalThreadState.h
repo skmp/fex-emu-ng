@@ -75,8 +75,8 @@ namespace FEXCore::Core {
     uint64_t GuestRIP;
     uint64_t StartAddr;
     uint64_t Length;
-    std::unique_ptr<FEXCore::IR::IRListView, FEXCore::IR::IRListViewDeleter> IR;
-    FEXCore::IR::RegisterAllocationData::UniquePtr RAData;
+    std::unique_ptr<FEXCore::IR::IRListView> IR;
+    std::unique_ptr<FEXCore::IR::RegisterAllocationData> RAData;
     std::unique_ptr<FEXCore::Core::DebugData> DebugData;
   };
 

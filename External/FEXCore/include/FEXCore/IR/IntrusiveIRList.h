@@ -136,7 +136,7 @@ public:
     ListSize = Data->ListSize();
 
     if (_IsCopy) {
-      IRDataInternal = malloc(DataSize + ListSize);
+      IRDataInternal = FEXCore::Allocator::malloc(DataSize + ListSize);
       ListDataInternal = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(IRDataInternal) + DataSize);
       memcpy(IRDataInternal, reinterpret_cast<void*>(Data->DataBegin()), DataSize);
       memcpy(ListDataInternal, reinterpret_cast<void*>(Data->ListBegin()), ListSize);
@@ -153,7 +153,7 @@ public:
     DataSize = Old->DataSize;
     ListSize = Old->ListSize;
     if (_IsCopy) {
-      IRDataInternal = malloc(DataSize + ListSize);
+      IRDataInternal = FEXCore::Allocator::malloc(DataSize + ListSize);
       ListDataInternal = reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(IRDataInternal) + DataSize);
       memcpy(IRDataInternal, Old->IRDataInternal, DataSize);
       memcpy(ListDataInternal, Old->ListDataInternal, ListSize);
@@ -165,8 +165,15 @@ public:
 
   ~IRListView() {
     if (IsCopy()) {
-      free (IRDataInternal);
+      FEXCore::Allocator::free (IRDataInternal);
       // ListData is just offset from IRData
+    }
+  }
+
+  void operator delete(void *p) {
+    auto r = (IRListView*)p;
+    if (!r->IsShared()) {
+      FEXCore::Allocator::free(r);
     }
   }
 
@@ -181,7 +188,7 @@ public:
     //size_t ListSize;
     stream.write((const char*)&ListSize, sizeof(ListSize));
     //uint64_t Flags;
-    uint64_t WrittenFlags = Flags | FLAG_Shared; //on disk format always has the Shared flag
+    uint64_t WrittenFlags = FLAG_Shared; //on disk format always has the Shared flag
     stream.write((const char*)&WrittenFlags, sizeof(WrittenFlags));
     
     // inline data
@@ -200,7 +207,7 @@ public:
     //size_t ListSize;
     memcpy(ptr, &ListSize, sizeof(ListSize)); ptr += sizeof(ListSize);
     //uint64_t Flags;
-    uint64_t WrittenFlags = Flags | FLAG_Shared; //on disk format always has the Shared flag
+    uint64_t WrittenFlags = FLAG_Shared; //on disk format always has the Shared flag
     memcpy(ptr, &WrittenFlags, sizeof(WrittenFlags)); ptr += sizeof(WrittenFlags);
     
     // inline data
@@ -397,14 +404,6 @@ private:
   size_t ListSize;
   uint64_t Flags {0};
   uint8_t InlineData[0];
-};
-
-struct IRListViewDeleter {
-  void operator()(IRListView* r) {
-    if (!r->IsShared()) {
-      delete r;
-    }
-  }
 };
 }
 

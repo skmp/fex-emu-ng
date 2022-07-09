@@ -197,8 +197,8 @@ namespace FEXCore::Context {
 #endif
 
     struct GenerateIRResult {
-      FEXCore::IR::IRListView* IRList;
-      FEXCore::IR::RegisterAllocationData::UniquePtr RAData;
+      FEXCore::IR::IRListView *IRList;
+      FEXCore::IR::RegisterAllocationData *RAData;
       uint64_t TotalInstructions;
       uint64_t TotalInstructionsLength;
       uint64_t StartAddr;
@@ -208,9 +208,9 @@ namespace FEXCore::Context {
 
     struct CompileCodeResult {
       void* CompiledCode;
-      FEXCore::IR::IRListView* IRData;
-      FEXCore::Core::DebugData* DebugData;
-      FEXCore::IR::RegisterAllocationData::UniquePtr RAData;
+      FEXCore::IR::IRListView *IRData;
+      FEXCore::Core::DebugData *DebugData;
+      FEXCore::IR::RegisterAllocationData *RAData;
       bool GeneratedIR;
       uint64_t StartAddr;
       uint64_t Length;

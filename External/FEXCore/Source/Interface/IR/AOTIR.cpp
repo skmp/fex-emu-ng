@@ -10,6 +10,7 @@
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <Interface/Core/LookupCache.h>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <fcntl.h>
@@ -62,7 +63,7 @@ namespace FEXCore::IR {
     flock(IndexFD, LOCK_EX);
 
     if (rv->Index->Tag != AOTIR_INDEX_COOKIE || rv->Data->Tag != AOTIR_DATA_COOKIE) {
-      // regenerate files
+      // regenerate files 
 
       // Index file
       rv->Index->Tag = AOTIR_INDEX_COOKIE;
@@ -140,7 +141,7 @@ namespace FEXCore::IR {
 
             if (!swapped) {
               // some other thread got to do this first
-              munmap(TestVal, CHUNK_SIZE);
+              munmap(v, CHUNK_SIZE);
             }
           }
 
@@ -249,6 +250,16 @@ namespace FEXCore::IR {
       ChunkNum = Data->ChunksUsed;
       ChunkOffset = 0;
       NewChunk = true;
+    } else if (!MappedDataChunks[ChunkNum]) {
+      // Make sure the required chunk is mapped
+      auto v = (uint8_t *)mmap(0, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, Data->ChunkOffsets[ChunkNum]);
+      uint8_t *TestVal = nullptr;
+      auto swapped = MappedDataChunks[ChunkNum].compare_exchange_strong(TestVal, v);
+
+      if (!swapped) {
+        // some other thread got to do this first
+        munmap(v, CHUNK_SIZE);
+      }
     }
 
     auto hash = XXH3_64bits((void*)GuestRIP, Length);
@@ -287,12 +298,12 @@ namespace FEXCore::IR {
       Index->Entries[NewEntry].DataOffset = ChunkNum * CHUNK_SIZE + ChunkOffset;
 
       if (NewEntry != 0) {
-        std::atomic_thread_fence(std::memory_order_release);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         // Increase Index Count. If process exits here, this index number will be wasted, but the index file won't be corrupted
         Index->Count++;
 
-        std::atomic_thread_fence(std::memory_order_release);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         // Link the index
         if (Index->Entries[InsertPoint].GuestStart < OffsetRIP) {
@@ -300,13 +311,13 @@ namespace FEXCore::IR {
         } else {
           Index->Entries[InsertPoint].Right = NewEntry;
         }
+        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         VERBOSE_LOG("Inserted {} after {} left {} right {}", NewEntry, m2, Index->Entries[m2].Left, Index->Entries[m2].Right);
 
-        std::atomic_thread_fence(std::memory_order_release);
       } else {
         // First entry
-        std::atomic_thread_fence(std::memory_order_release);
+        std::atomic_thread_fence(std::memory_order_seq_cst);
 
         Index->Count = 1;
       }
