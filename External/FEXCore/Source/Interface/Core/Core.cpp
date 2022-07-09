@@ -8,6 +8,7 @@ $end_info$
 */
 
 #include <cstdint>
+#include "FEXHeaderUtils/TypeDefines.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/LookupCache.h"
 #include "Interface/Core/Core.h"
@@ -708,12 +709,14 @@ namespace FEXCore::Context {
     }
   }
 
-  Context::GenerateIRResult Context::GenerateIR(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP, bool ExtendedDebugInfo) {    
+  Context::GenerateIRResult Context::GenerateIR(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP, uint64_t MinAddr, uint64_t MaxAddr, bool ExtendedDebugInfo) {    
     Thread->OpDispatcher->ReownOrClaimBuffer();
     Thread->OpDispatcher->ResetWorkingList();
 
     uint64_t TotalInstructions {0};
     uint64_t TotalInstructionsLength {0};
+
+    std::vector<std::pair<uint64_t, uint64_t>> Ranges;
 
 
     std::shared_lock lk(CustomIRMutex);
@@ -731,6 +734,7 @@ namespace FEXCore::Context {
 
       bool HadDispatchError {false};
 
+      Thread->FrontendDecoder->SetSectionMaxAddress(MaxAddr);
       Thread->FrontendDecoder->DecodeInstructionsAtEntry(GuestCode, GuestRIP, [Thread](uint64_t BlockEntry, uint64_t Start, uint64_t Length) {
         if (Thread->LookupCache->AddBlockExecutableRange(BlockEntry, Start, Length)) {
           Thread->CTX->SyscallHandler->MarkGuestExecutableRange(Start, Length);
@@ -832,6 +836,7 @@ namespace FEXCore::Context {
             break;
           }
         }
+        Ranges.push_back({Block.Entry - GuestRIP, BlockInstructionsLength});
       }
       
       Thread->OpDispatcher->Finalize();
@@ -880,6 +885,7 @@ namespace FEXCore::Context {
       .TotalInstructionsLength = TotalInstructionsLength,
       .StartAddr = Thread->FrontendDecoder->DecodedMinAddress,
       .Length = Thread->FrontendDecoder->DecodedMaxAddress - Thread->FrontendDecoder->DecodedMinAddress,
+      .Ranges = std::move(Ranges)
     };
   }
 
@@ -891,11 +897,18 @@ namespace FEXCore::Context {
     uint64_t StartAddr {};
     uint64_t Length {};
 
+    std::vector<std::pair<uint64_t, uint64_t>> Ranges;
+
     // NamedRegion contains a lock, be mindful of its scope
+    uint64_t MinAddr = GuestRIP;
+    uint64_t MaxAddr = UINT64_MAX;
+
     {
       auto NamedRegion = SyscallHandler->LookupNamedRegion(GuestRIP);
 
       if (NamedRegion.Entry) {
+        MinAddr = NamedRegion.VAMin;
+        MaxAddr = NamedRegion.VAMax - 1;
         if (Config.GDBSymbols() && SourcecodeResolver && !NamedRegion.Entry->SourcecodeMap) {
           NamedRegion.Entry->SourcecodeMap = SourcecodeResolver->GenerateMap(NamedRegion.Entry->Filename, NamedRegion.Entry->FileId);
         }
@@ -917,12 +930,28 @@ namespace FEXCore::Context {
             auto CachedIR = NamedRegion.Entry->AOTIRCache->Find(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
             if (CachedIR) {
+              std::set<uint64_t> CodePages;
+
+              for (size_t i = 0; i < CachedIR->RangeCounts; i++) {
+                for (size_t p = 0; p < CachedIR->Ranges[i].second; p += 4096) {
+                  auto Page = (GuestRIP + CachedIR->Ranges[i].first + p) &
+                              FHU::FEX_PAGE_MASK;
+                  if (CodePages.insert(Page).second) {
+                    if (Thread->LookupCache->AddBlockExecutableRange(
+                            GuestRIP, Page, FHU::FEX_PAGE_SIZE)) {
+                      Thread->CTX->SyscallHandler->MarkGuestExecutableRange(
+                          Page, FHU::FEX_PAGE_SIZE);
+                    }
+                  }
+                }
+              }
+
               // Setup pointers to internal structures
               IRList = CachedIR->IRList;
               RAData = CachedIR->RAData;
               DebugData = new Core::DebugData();
-              StartAddr = CachedIR->StartAddr;
-              Length = CachedIR->Length;
+              StartAddr = 0;
+              Length = 0;
               GeneratedIR = false;
             }
           }
@@ -935,7 +964,7 @@ namespace FEXCore::Context {
 
     if (IRList == nullptr) {
       // Generate IR + Meta Info
-      auto [IRCopy, RACopy, TotalInstructions, TotalInstructionsLength, _StartAddr, _Length] = GenerateIR(Thread, GuestRIP, Config.GDBSymbols());
+      auto [IRCopy, RACopy, TotalInstructions, TotalInstructionsLength, _StartAddr, _Length, _Ranges] = GenerateIR(Thread, GuestRIP, MinAddr, MaxAddr, Config.GDBSymbols());
 
       // Setup pointers to internal structures
       IRList = IRCopy;
@@ -943,6 +972,7 @@ namespace FEXCore::Context {
       DebugData = new FEXCore::Core::DebugData();
       StartAddr = _StartAddr;
       Length = _Length;
+      Ranges = std::move(_Ranges);
 
       // Increment stats
       Thread->Stats.BlocksCompiled.fetch_add(1);
@@ -963,6 +993,7 @@ namespace FEXCore::Context {
       .GeneratedIR = GeneratedIR,
       .StartAddr = StartAddr,
       .Length = Length,
+      .Ranges = std::move(Ranges)
     };
   }
 
@@ -996,7 +1027,7 @@ namespace FEXCore::Context {
     bool GeneratedIR {};
     uint64_t StartAddr {}, Length {};
 
-    auto [Code, IR, Data, RAData, Generated, _StartAddr, _Length] = CompileCode(Thread, GuestRIP);
+    auto [Code, IR, Data, RAData, Generated, _StartAddr, _Length, Ranges] = CompileCode(Thread, GuestRIP);
     CodePtr = Code;
     IRList = IR;
     DebugData = Data;
@@ -1052,7 +1083,7 @@ namespace FEXCore::Context {
 
       if (Config.AOTIRCapture() || Config.AOTIRGenerate()) {
         if (GeneratedIR && RAData && NamedRegion.Entry) {
-          NamedRegion.Entry->AOTIRCache->Insert(GuestRIP - NamedRegion.VAFileStart, GuestRIP, StartAddr, Length, IRList, RAData);
+          NamedRegion.Entry->AOTIRCache->Insert(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, IRList, RAData);
         }
       }
     }

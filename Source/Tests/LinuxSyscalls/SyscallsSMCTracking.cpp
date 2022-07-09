@@ -175,6 +175,8 @@ FEXCore::HLE::NamedRegionLookupResult SyscallHandler::LookupNamedRegion(uint64_t
   if (Entry != _SyscallHandler->VMATracking.VMAs.end()) {
     rv.Entry = Entry->second.Resource ? Entry->second.Resource->NamedRegion : nullptr;
     rv.VAFileStart = Entry->second.Base - Entry->second.Offset;
+    rv.VAMin = Entry->second.Base;
+    rv.VAMax = Entry->second.Base + Entry->second.Length;
   }
 
   return rv;

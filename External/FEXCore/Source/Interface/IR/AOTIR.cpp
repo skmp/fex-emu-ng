@@ -42,7 +42,40 @@
   - current segment free
 */
 
-#define VERBOSE_LOG(...) //LogMan::Msg::DFmt
+//#define DEBUG_CORRUPTION
+
+#if DEBUG_CORRUPTION
+#define DEBUG_CORRUPTION_SZ 8
+#else
+#define DEBUG_CORRUPTION_SZ 0
+#endif
+
+#define VERBOSE_LOG(...) // LogMan::Msg::DFmt
+#define VERBOSE_LOG2(...) //LogMan::Msg::DFmt
+
+static void LockFD(int fd) {
+  struct flock fl;
+
+  fl.l_type   = F_WRLCK;
+  fl.l_whence = SEEK_SET;
+  fl.l_start  = 0;
+  fl.l_len    = 0;
+  fl.l_pid    = getpid();
+
+  fcntl(fd, F_SETLKW, &fl);
+}
+
+static void UnlockFD(int fd) {
+  struct flock fl;
+
+  fl.l_type   = F_UNLCK;
+  fl.l_whence = SEEK_SET;
+  fl.l_start  = 0;
+  fl.l_len    = 0;
+  fl.l_pid    = getpid();
+
+  fcntl(fd, F_SETLKW, &fl);
+}
 
 namespace FEXCore::IR {
   std::unique_ptr<AOTIRCache> AOTIRCache::LoadFile(int IndexFD, int DataFD) {
@@ -60,7 +93,7 @@ namespace FEXCore::IR {
     fallocate(DataFD, 0, 0, DataMapSize);
     rv->Data = (decltype(rv->Data))mmap(nullptr, DataMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, 0);
 
-    flock(IndexFD, LOCK_EX);
+    LockFD(IndexFD);
 
     if (rv->Index->Tag != AOTIR_INDEX_COOKIE || rv->Data->Tag != AOTIR_DATA_COOKIE) {
       // regenerate files 
@@ -77,7 +110,7 @@ namespace FEXCore::IR {
       rv->Data->WritePointer = AlignUp(DataMapSize, FHU::FEX_PAGE_SIZE);
     }
 
-    flock(IndexFD, LOCK_UN);
+    UnlockFD(IndexFD);
 
     auto NChunks = rv->Data->ChunksUsed.load();
 
@@ -127,7 +160,7 @@ namespace FEXCore::IR {
       size_t m = 0;
 
       while (m < Count) {
-        VERBOSE_LOG("Looking {} {:x} l:{} r:{}", m, Index->Entries[m].GuestStart, Index->Entries[m].Left, Index->Entries[m].Right);
+        VERBOSE_LOG2("Looking {} {:x} l:{} r:{}", m, Index->Entries[m].GuestStart, Index->Entries[m].Left, Index->Entries[m].Right);
         if (Index->Entries[m].GuestStart == OffsetRIP) {
           auto DataOffset = Index->Entries[m].DataOffset;
 
@@ -146,6 +179,8 @@ namespace FEXCore::IR {
           }
 
           CacheEntry = (decltype(CacheEntry))(MappedDataChunks[ChunkNo] + ChunkOffs);
+
+          VERBOSE_LOG("Found {:x} {:x} in index {} {}", GuestRIP, OffsetRIP, (void*)CacheEntry, CacheEntry->GuestRangeCounts);
           break;
         } else if (Index->Entries[m].GuestStart < OffsetRIP) {
           m = Index->Entries[m].Left;
@@ -159,29 +194,48 @@ namespace FEXCore::IR {
       return std::nullopt;
     } else {
         // verify hash
-        auto hash = XXH3_64bits((void*)GuestRIP, CacheEntry->GuestLength);
+        uint64_t hash = 0;
+        auto Ranges = CacheEntry->GetRangeData();
+        for (size_t i = 0; i < CacheEntry->GuestRangeCounts; i++){ 
+          VERBOSE_LOG("Hashing {:x} {:x} - {:x} {:x} in cache", GuestRIP, OffsetRIP, Ranges[i].first, Ranges[i].second);
+          hash = XXH3_64bits_withSeed((void*)(GuestRIP + Ranges[i].first), Ranges[i].second, hash);
+          VERBOSE_LOG("Hashed {:x} {:x} in cache", GuestRIP, OffsetRIP);
+        }
+
         if (hash != CacheEntry->GuestHash) {
           LogMan::Msg::IFmt("AOTIR: hash check failed {:x}\n", GuestRIP);
           return std::nullopt;
         }
 
+        #if DEBUG_CORRUPTION
+        auto DataSize = CacheEntry->GetIRData()->GetInlineSize() + CacheEntry->GetRAData()->Size() + 16 + CacheEntry->GuestRangeCounts * 16 + DEBUG_CORRUPTION_SZ;
+        auto hash2 = XXH3_64bits(CacheEntry, DataSize - 8);
+
+        auto hash2C = *(uint64_t*)(((uint8_t*)CacheEntry ) + DataSize - 8);
+
+        if (hash2 != hash2C) {
+          printf("AOTIR: hash2 check failed %lx\n", GuestRIP);
+          return std::nullopt;
+        }
+        #endif
+        
         VERBOSE_LOG("Found {:x} {:x} in cache", GuestRIP, OffsetRIP);
         return IRCacheResult {
           .IRList = CacheEntry->GetIRData(),
           .RAData = CacheEntry->GetRAData(),
-          .StartAddr = GuestRIP,
-          .Length = CacheEntry->GuestLength,
+          .RangeCounts =  CacheEntry->GuestRangeCounts,
+          .Ranges = Ranges,
         };
     }
   }
 
-  void AOTIRCache::Insert(uint64_t OffsetRIP, uint64_t GuestRIP, uint64_t StartAddr, uint64_t Length, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData) {
+  void AOTIRCache::Insert(uint64_t OffsetRIP, uint64_t GuestRIP, const std::vector<std::pair<uint64_t, uint64_t>>& Ranges, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData) {
     
     // process wide lock
     std::lock_guard lk {Mutex};
 
     // File lock
-    flock(IndexFD, LOCK_EX);
+    LockFD(IndexFD);
 
     // Resize Index file if needed
     {
@@ -213,10 +267,10 @@ namespace FEXCore::IR {
 
       while (m < Count) {
         InsertPoint = m;
-        VERBOSE_LOG("Insert Looking {} {} {:x} l:{} r:{}", (uint8_t*)(&Index->Entries[m]) - (uint8_t*)Index, m, Index->Entries[m].GuestStart, Index->Entries[m].Left, Index->Entries[m].Right);
+        VERBOSE_LOG2("Insert Looking {} {} {:x} l:{} r:{}", (uint8_t*)(&Index->Entries[m]) - (uint8_t*)Index, m, Index->Entries[m].GuestStart, Index->Entries[m].Left, Index->Entries[m].Right);
 
         if (Index->Entries[m].GuestStart == OffsetRIP) {
-          flock(IndexFD, LOCK_UN);
+          UnlockFD(IndexFD);
           // some other process got here already. Abort.
           return;
         } else if (Index->Entries[m].GuestStart < OffsetRIP) {
@@ -229,8 +283,7 @@ namespace FEXCore::IR {
 
 
     // Resize Data file if needed
-    auto RADataSize = RAData->Size();
-    auto DataSize = IRList->GetInlineSize() + RADataSize + 16;
+    auto DataSize = IRList->GetInlineSize() + RAData->Size() + 16 + Ranges.size() * 16 + DEBUG_CORRUPTION_SZ;
     auto DataSizeAligned = AlignUp(DataSize, 32);
 
     bool NewChunk = false;
@@ -262,23 +315,49 @@ namespace FEXCore::IR {
       }
     }
 
-    auto hash = XXH3_64bits((void*)GuestRIP, Length);
-
     uint8_t *Destination = MappedDataChunks[ChunkNum] + ChunkOffset;
+    auto Start = Destination;
 
-    memcpy(Destination, &hash, sizeof(hash)); Destination += sizeof(hash);
-    memcpy(Destination, &Length, sizeof(Length)); Destination += sizeof(Length);
+    uint64_t &hash = *(uint64_t *)Destination; Destination += sizeof(hash);
+    hash = 0;
+
+    uint64_t Count = Ranges.size();
+    memcpy(Destination, &Count, sizeof(Count)); Destination += sizeof(Count);
+
+    for (auto &Range: Ranges) {
+      hash = XXH3_64bits_withSeed((void*)(GuestRIP + Range.first), Range.second, hash);
+
+      memcpy(Destination, &Range.first, sizeof(Range.first)); Destination += sizeof(Range.first);
+      memcpy(Destination, &Range.second, sizeof(Range.second)); Destination += sizeof(Range.second);
+    }
 
     // Copy RAData and IRList to the Data file
-    RAData->Serialize(Destination); Destination += RADataSize;
-    IRList->Serialize(Destination);
+    RAData->Serialize(Destination); Destination += RAData->Size();
+    IRList->Serialize(Destination); Destination += IRList->GetInlineSize();
 
-    std::atomic_thread_fence(std::memory_order_release);
+#if DEBUG_CORRUPTION
+    uint64_t hash2 = XXH3_64bits(Start, DataSize - 8);
+    memcpy(Destination, &hash2, sizeof(hash2)); Destination += sizeof(hash2);
+#endif
+
+    if (Start + DataSize != Destination) {
+      ERROR_AND_DIE_FMT("Bad size calculation");
+    }
+
+    auto Entry = (AOTIRCacheEntry *)Start;
+
+#if DEBUG_CORRUPTION
+    if (Entry->GetIRData()->GetInlineSize() != IRList->GetInlineSize()) {
+      ERROR_AND_DIE_FMT("Bad size calculation (GetIRData) {} != {}", Entry->GetIRData()->GetInlineSize(), IRList->GetInlineSize());
+    }
+#endif
+
+    std::atomic_thread_fence(std::memory_order_seq_cst);
 
     // Update Data file
     // If process crashes after here, the file might contain some junk, but won't be corrupted
     if (NewChunk) {
-      Data->WritePointer = Data->ChunkOffsets[Data->ChunksUsed];
+      Data->WritePointer = Data->ChunkOffsets[ChunkNum];
       Data->ChunksUsed++;
       Data->CurrentChunkFree = CHUNK_SIZE;
     }
@@ -313,7 +392,7 @@ namespace FEXCore::IR {
         }
         std::atomic_thread_fence(std::memory_order_seq_cst);
 
-        VERBOSE_LOG("Inserted {} after {} left {} right {}", NewEntry, m2, Index->Entries[m2].Left, Index->Entries[m2].Right);
+        VERBOSE_LOG("Inserted {} after {} left {} right {}", NewEntry, InsertPoint, Index->Entries[InsertPoint].Left, Index->Entries[InsertPoint].Right);
 
       } else {
         // First entry
@@ -324,19 +403,22 @@ namespace FEXCore::IR {
     }
         
     // All done, unlock file
-    flock(IndexFD, LOCK_UN);
+    UnlockFD(IndexFD);
 
     VERBOSE_LOG("Inserted {:x} {:x} to cache", GuestRIP, OffsetRIP);
   }
 
+  std::pair<uint64_t, uint64_t> *AOTIRCacheEntry::GetRangeData() {
+    return (std::pair<uint64_t, uint64_t> *)(InlineData);
+  }
   IR::RegisterAllocationData *AOTIRCacheEntry::GetRAData() {
-    return (IR::RegisterAllocationData *)InlineData;
+    return (IR::RegisterAllocationData *)(InlineData + GuestRangeCounts * 16);
   }
 
   IR::IRListView *AOTIRCacheEntry::GetIRData() {
     auto RAData = GetRAData();
     auto Offset = RAData->Size();
 
-    return (IR::IRListView *)&InlineData[Offset];
+    return (IR::IRListView *)&InlineData[GuestRangeCounts * 16 + Offset];
   }
 }
