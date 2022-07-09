@@ -13,6 +13,7 @@
 #include <shared_mutex>
 #include <queue>
 #include <FEXCore/HLE/SourcecodeResolver.h>
+#include <utility>
 
 namespace FEXCore::Core {
 struct DebugData;
@@ -49,11 +50,14 @@ namespace FEXCore::IR {
 
   struct AOTIRCacheEntry {
     uint64_t GuestHash;
-    uint64_t GuestLength;
+    uint64_t GuestRangeCounts;
 
-    /* RAData followed by IRData */
+    // Ranges { 16b } 
+    // RAData
+    // IRData
     uint8_t InlineData[0];
 
+    std::pair<uint64_t, uint64_t> *GetRangeData();
     IR::RegisterAllocationData *GetRAData();
     IR::IRListView *GetIRData();
   };
@@ -86,8 +90,8 @@ namespace FEXCore::IR {
   struct IRCacheResult {
     FEXCore::IR::IRListView *IRList {};
     FEXCore::IR::RegisterAllocationData *RAData {};
-    uint64_t StartAddr {};
-    uint64_t Length {};
+    uint64_t RangeCounts {};
+    std::pair<uint64_t, uint64_t> *Ranges {};
   };
 
   class AOTIRCache {
@@ -95,7 +99,7 @@ namespace FEXCore::IR {
       static std::unique_ptr<AOTIRCache> LoadFile(int IndexFD, int DataFD);
       ~AOTIRCache();
       std::optional<IRCacheResult> Find(uint64_t OffsetRIP, uint64_t GuestRIP);
-      void Insert(uint64_t OffsetRIP, uint64_t GuestRIP, uint64_t StartAddr, uint64_t Length, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData);
+      void Insert(uint64_t OffsetRIP, uint64_t GuestRIP, const std::vector<std::pair<uint64_t, uint64_t>>& Ranges, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData);
 
     private:
       std::shared_mutex Mutex;

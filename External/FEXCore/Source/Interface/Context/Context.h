@@ -206,8 +206,9 @@ namespace FEXCore::Context {
       uint64_t TotalInstructionsLength;
       uint64_t StartAddr;
       uint64_t Length;
+      std::vector<std::pair<uint64_t, uint64_t>> Ranges;
     };
-    [[nodiscard]] GenerateIRResult GenerateIR(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP, bool ExtendedDebugInfo);
+    [[nodiscard]] GenerateIRResult GenerateIR(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP,uint64_t MinAddr, uint64_t MaxAddr, bool ExtendedDebugInfo);
 
     struct CompileCodeResult {
       void* CompiledCode;
@@ -217,6 +218,7 @@ namespace FEXCore::Context {
       bool GeneratedIR;
       uint64_t StartAddr;
       uint64_t Length;
+      std::vector<std::pair<uint64_t, uint64_t>> Ranges;
     };
     [[nodiscard]] CompileCodeResult CompileCode(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP);
     uintptr_t CompileBlock(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP);

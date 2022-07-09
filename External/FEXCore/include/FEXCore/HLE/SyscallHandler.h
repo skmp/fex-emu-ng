@@ -60,6 +60,8 @@ namespace FEXCore::HLE {
 
     FEXCore::Core::NamedRegion *Entry;
     uintptr_t VAFileStart;
+    uintptr_t VAMin;
+    uintptr_t VAMax;
 
     friend class SyscallHandler;
     protected:
