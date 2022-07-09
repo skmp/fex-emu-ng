@@ -893,14 +893,19 @@ namespace FEXCore::Context {
       }
     }
 
-    auto RAData = Thread->PassManager->HasPass("RA") ? Thread->PassManager->GetPass<IR::RegisterAllocationPass>("RA")->PullAllocationData() : nullptr;
+    IR::RegisterAllocationData *RAData = nullptr;
+    
+    if (Thread->PassManager->HasPass("RA")) {
+      RAData = Thread->PassManager->GetPass<IR::RegisterAllocationPass>("RA")->PullAllocationData().release();
+    }
+
     auto IRList = IREmitter->CreateIRCopy();
 
     IREmitter->DelayedDisownBuffer();
 
     return {
       .IRList = IRList,
-      .RAData = std::move(RAData),
+      .RAData = RAData,
       .TotalInstructions = TotalInstructions,
       .TotalInstructionsLength = TotalInstructionsLength,
       .StartAddr = Thread->FrontendDecoder->DecodedMinAddress,
@@ -911,7 +916,7 @@ namespace FEXCore::Context {
   Context::CompileCodeResult Context::CompileCode(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
     FEXCore::IR::IRListView *IRList {};
     FEXCore::Core::DebugData *DebugData {};
-    FEXCore::IR::RegisterAllocationData::UniquePtr RAData {};
+    FEXCore::IR::RegisterAllocationData *RAData {};
     bool GeneratedIR {};
     uint64_t StartAddr {};
     uint64_t Length {};
@@ -944,7 +949,7 @@ namespace FEXCore::Context {
             if (CachedIR) {
               // Setup pointers to internal structures
               IRList = CachedIR->IRList;
-              RAData.reset(CachedIR->RAData);
+              RAData = CachedIR->RAData;
               DebugData = new Core::DebugData();
               StartAddr = CachedIR->StartAddr;
               Length = CachedIR->Length;
@@ -964,7 +969,7 @@ namespace FEXCore::Context {
 
       // Setup pointers to internal structures
       IRList = IRCopy;
-      RAData = std::move(RACopy);
+      RAData = RACopy;
       DebugData = new FEXCore::Core::DebugData();
       StartAddr = _StartAddr;
       Length = _Length;
@@ -981,10 +986,10 @@ namespace FEXCore::Context {
     }
     // Attempt to get the CPU backend to compile this code
     return {
-      .CompiledCode = Thread->CPUBackend->CompileCode(GuestRIP, IRList, DebugData, RAData.get(), GetGdbServerStatus()),
+      .CompiledCode = Thread->CPUBackend->CompileCode(GuestRIP, IRList, DebugData, RAData, GetGdbServerStatus()),
       .IRData = IRList,
       .DebugData = DebugData,
-      .RAData = std::move(RAData),
+      .RAData = RAData,
       .GeneratedIR = GeneratedIR,
       .StartAddr = StartAddr,
       .Length = Length,
@@ -1077,17 +1082,21 @@ namespace FEXCore::Context {
 
       if (Config.AOTIRCapture() || Config.AOTIRGenerate()) {
         if (GeneratedIR && RAData && NamedRegion.Entry) {
-          NamedRegion.Entry->AOTIRCache->Insert(GuestRIP - NamedRegion.VAFileStart, GuestRIP, StartAddr, Length, IRList, RAData.get());
+          NamedRegion.Entry->AOTIRCache->Insert(GuestRIP - NamedRegion.VAFileStart, GuestRIP, StartAddr, Length, IRList, RAData);
         }
       }
     }
 
     if (GetGdbServerStatus()) {
       // Add to thread local ir cache
-      Core::DebugIREntry Entry = {GuestRIP, StartAddr, Length, decltype(Entry.IR)(IRList), std::move(RAData), decltype(Entry.DebugData)(DebugData)};
+      Core::DebugIREntry Entry = {GuestRIP, StartAddr, Length, decltype(Entry.IR)(IRList), decltype(Entry.RAData)(RAData), decltype(Entry.DebugData)(DebugData)};
       
       std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
       Thread->DebugStore.insert({(uintptr_t)CodePtr, std::move(Entry)});
+    } else {
+      delete IRList;
+      delete RAData;
+      delete DebugData;
     }
 
 

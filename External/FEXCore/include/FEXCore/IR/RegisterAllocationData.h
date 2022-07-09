@@ -53,11 +53,9 @@ class FEX_PACKED RegisterAllocationData {
       return Size(MapCount);
     }
 
-    using UniquePtr = std::unique_ptr<FEXCore::IR::RegisterAllocationData, RegisterAllocationDataDeleter>;
+    static std::unique_ptr<RegisterAllocationData> Create(uint32_t NodeCount);
 
-    static UniquePtr Create(uint32_t NodeCount);
-
-    UniquePtr CreateCopy() const;
+    std::unique_ptr<RegisterAllocationData> CreateCopy() const;
 
     void Serialize(std::ostream& stream) const {
       stream.write((const char*)&SpillSlotCount, sizeof(SpillSlotCount));
@@ -78,30 +76,29 @@ class FEX_PACKED RegisterAllocationData {
       memcpy(ptr, &_IsShared, sizeof(_IsShared)); ptr += sizeof(_IsShared);
       memcpy(ptr, &Map[0], sizeof(Map[0]) * MapCount); ptr += sizeof(Map[0]) * MapCount;
     }
-};
 
-struct RegisterAllocationDataDeleter {
-  void operator()(RegisterAllocationData* r) const {
-    if (!r->IsShared) {
-      FEXCore::Allocator::free(r);
+    void operator delete(void *p) {
+      auto r = (RegisterAllocationData*)p;
+      if (!r->IsShared) {
+        FEXCore::Allocator::free(r);
+      }
     }
-  }
 };
 
-inline auto RegisterAllocationData::Create(uint32_t NodeCount) -> UniquePtr {
+inline auto RegisterAllocationData::Create(uint32_t NodeCount) -> std::unique_ptr<RegisterAllocationData> {
   auto Ret = (RegisterAllocationData*)FEXCore::Allocator::malloc(Size(NodeCount));
   memset(&Ret->Map[0], PhysicalRegister::Invalid().Raw, NodeCount);
   Ret->MapCount = NodeCount;
-  return UniquePtr { Ret };
+  return std::unique_ptr<RegisterAllocationData> (Ret);
 }
 
-inline auto RegisterAllocationData::CreateCopy() const -> UniquePtr {
+inline auto RegisterAllocationData::CreateCopy() const -> std::unique_ptr<RegisterAllocationData> {
   auto copy = (RegisterAllocationData*)FEXCore::Allocator::malloc(Size(MapCount));
   memcpy((void*)&copy->Map[0], (void*)&Map[0], MapCount * sizeof(Map[0]));
   copy->SpillSlotCount = SpillSlotCount;
   copy->MapCount = MapCount;
-  copy->IsShared = IsShared;
-  return UniquePtr { copy };
+  copy->IsShared = false;
+  return std::unique_ptr<RegisterAllocationData> (copy);
 }
 
 }
