@@ -1,8 +1,9 @@
 #pragma once
+
+#if 0
 #include "Interface/Context/Context.h"
 #include "Interface/Core/ObjectCache/Relocations.h"
 #include "Interface/Core/ObjectCache/CodeObjectSerializationConfig.h"
-#include "Interface/IR/AOTIR.h"
 
 #include <FEXCore/Utils/Event.h>
 #include <FEXCore/Utils/Threads.h>
@@ -457,3 +458,5 @@ namespace FEXCore::CodeSerialize {
       CodeRegionPtrMapType UnrelocatedAddressToEntryMap;
   };
 }
+
+#endif

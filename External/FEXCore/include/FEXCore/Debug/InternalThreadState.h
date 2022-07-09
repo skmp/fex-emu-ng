@@ -8,6 +8,7 @@
 #include <FEXCore/Utils/InterruptableConditionVariable.h>
 #include <FEXCore/Utils/Threads.h>
 
+#include <cstdint>
 #include <map>
 #include <unordered_map>
 #include <shared_mutex>
@@ -70,7 +71,8 @@ namespace FEXCore::Core {
     Return,
   };
 
-  struct LocalIREntry {
+  struct DebugIREntry {
+    uint64_t GuestRIP;
     uint64_t StartAddr;
     uint64_t Length;
     std::unique_ptr<FEXCore::IR::IRListView, FEXCore::IR::IRListViewDeleter> IR;
@@ -100,7 +102,7 @@ namespace FEXCore::Core {
     std::unique_ptr<FEXCore::CPU::CPUBackend> CPUBackend;
     std::unique_ptr<FEXCore::LookupCache> LookupCache;
 
-    std::unordered_map<uint64_t, LocalIREntry> DebugStore;
+    std::unordered_map<uintptr_t, DebugIREntry> DebugStore;
 
     std::unique_ptr<FEXCore::Frontend::Decoder> FrontendDecoder;
     std::unique_ptr<FEXCore::IR::PassManager> PassManager;

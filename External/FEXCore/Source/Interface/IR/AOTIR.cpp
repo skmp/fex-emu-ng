@@ -1,3 +1,6 @@
+#include "FEXCore/Utils/LogManager.h"
+#include "FEXCore/Utils/MathUtils.h"
+#include "FEXHeaderUtils/TypeDefines.h"
 #include "Interface/Context/Context.h"
 #include "Interface/IR/AOTIR.h"
 
@@ -6,410 +9,323 @@
 #include <FEXCore/Utils/Allocator.h>
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <Interface/Core/LookupCache.h>
-#include <Interface/GDBJIT/GDBJIT.h>
 
 #include <cstddef>
 #include <cstdint>
+#include <fcntl.h>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <mutex>
+#include <optional>
+#include <shared_mutex>
+#include <sys/file.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
 #include <xxhash.h>
 
+/*
+
+  Cache index files
+  - current top
+  - left, right
+  - [seg, offset]
+
+  Cache data files
+    mapped in 16 meg segments
+    up to 64K segments
+
+  - segment index [64 bits * 64k]
+  - current segment id
+  - current segment free
+*/
+
+#define VERBOSE_LOG(...) //LogMan::Msg::DFmt
 
 namespace FEXCore::IR {
-  AOTIRInlineEntry *AOTIRInlineIndex::GetInlineEntry(uint64_t DataOffset) {
-    uintptr_t This = (uintptr_t)this;
+  std::unique_ptr<AOTIRCache> AOTIRCache::LoadFile(int IndexFD, int DataFD) {
 
-    return (AOTIRInlineEntry*)(This + DataBase + DataOffset);
-  }
+    auto rv = std::unique_ptr<AOTIRCache>(new AOTIRCache());
 
-  AOTIRInlineEntry *AOTIRInlineIndex::Find(uint64_t GuestStart) {
-    ssize_t l = 0;
-    ssize_t r = Count - 1;
+    rv->IndexFD = IndexFD;
+    rv->DataFD = DataFD;
 
-    while (l <= r) {
-      size_t m = l + (r - l) / 2;
+    rv->IndexFileSize = AlignUp(sizeof(*rv->Index), FHU::FEX_PAGE_SIZE);
+    fallocate(IndexFD, 0, 0, rv->IndexFileSize);
+    rv->Index = (decltype(rv->Index))mmap(nullptr, rv->IndexFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, IndexFD, 0);
 
-      if (Entries[m].GuestStart == GuestStart)
-        return GetInlineEntry(Entries[m].DataOffset);
-      else if (Entries[m].GuestStart < GuestStart)
-        l = m + 1;
-      else
-        r = m - 1;
+    auto DataMapSize = AlignUp(sizeof(*rv->Data), FHU::FEX_PAGE_SIZE);
+    fallocate(DataFD, 0, 0, DataMapSize);
+    rv->Data = (decltype(rv->Data))mmap(nullptr, DataMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, 0);
+
+    flock(IndexFD, LOCK_EX);
+
+    if (rv->Index->Tag != AOTIR_INDEX_COOKIE || rv->Data->Tag != AOTIR_DATA_COOKIE) {
+      // regenerate files
+
+      // Index file
+      rv->Index->Tag = AOTIR_INDEX_COOKIE;
+      rv->Index->FileSize = rv->IndexFileSize.load();
+      rv->Index->Count = 0;
+
+      // Data file
+      rv->Data->Tag = AOTIR_DATA_COOKIE;
+      rv->Data->ChunksUsed = 0;
+      rv->Data->CurrentChunkFree = 0;
+      rv->Data->WritePointer = AlignUp(DataMapSize, FHU::FEX_PAGE_SIZE);
     }
 
-    return nullptr;
+    flock(IndexFD, LOCK_UN);
+
+    auto NChunks = rv->Data->ChunksUsed.load();
+
+    for (decltype(NChunks) i = 0; i < NChunks; i++) {
+      rv->MappedDataChunks[i] = (uint8_t*) mmap(nullptr, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, rv->DataFD, rv->Data->ChunkOffsets[i]);
+    }
+
+    return rv;
   }
 
-  IR::RegisterAllocationData *AOTIRInlineEntry::GetRAData() {
+  AOTIRCache::~AOTIRCache() {
+    // unmap
+    FEXCore::Allocator::munmap(Index, IndexFileSize);
+    FEXCore::Allocator::munmap(Data, sizeof(*Data));
+
+    for (auto &Ptr: MappedDataChunks) {
+      if (Ptr) {
+        FEXCore::Allocator::munmap(Ptr, CHUNK_SIZE);
+      }
+    }
+
+    // close files
+    close(IndexFD);
+    close(DataFD);
+  }
+
+  std::optional<IRCacheResult> AOTIRCache::Find(uint64_t OffsetRIP, uint64_t GuestRIP) {
+
+    AOTIRCacheEntry *CacheEntry = nullptr;
+
+    // Read the count before any remap
+    auto Count = Index->Count.load();
+
+    if (Index->FileSize > IndexFileSize) {
+      std::lock_guard lk {Mutex};
+      auto OldSize = IndexFileSize.load();
+      IndexFileSize = Index->FileSize.load();
+      Index = (decltype(Index))mremap(Index, OldSize, IndexFileSize, MREMAP_MAYMOVE);
+      
+      LogMan::Msg::DFmt("remapped Index: {}, IndexFileSize: {}", (void*)Index, IndexFileSize.load());
+      LOGMAN_THROW_A_FMT(Index != MAP_FAILED, "mremap failed {} {} {}", (void*)Index, OldSize, IndexFileSize.load());
+    }
+
+    {
+      std::shared_lock lk{Mutex};
+
+      size_t m = 0;
+
+      while (m < Count) {
+        VERBOSE_LOG("Looking {} {:x} l:{} r:{}", m, Index->Entries[m].GuestStart, Index->Entries[m].Left, Index->Entries[m].Right);
+        if (Index->Entries[m].GuestStart == OffsetRIP) {
+          auto DataOffset = Index->Entries[m].DataOffset;
+
+          auto ChunkNo = DataOffset / CHUNK_SIZE;
+          auto ChunkOffs = DataOffset % CHUNK_SIZE;
+
+          if (!MappedDataChunks[ChunkNo]) {
+            auto v = (uint8_t *)mmap(0, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, Data->ChunkOffsets[ChunkNo]);
+            uint8_t *TestVal = nullptr;
+            auto swapped = MappedDataChunks[ChunkNo].compare_exchange_strong(TestVal, v);
+
+            if (!swapped) {
+              // some other thread got to do this first
+              munmap(TestVal, CHUNK_SIZE);
+            }
+          }
+
+          CacheEntry = (decltype(CacheEntry))(MappedDataChunks[ChunkNo] + ChunkOffs);
+          break;
+        } else if (Index->Entries[m].GuestStart < OffsetRIP) {
+          m = Index->Entries[m].Left;
+        } else {
+          m = Index->Entries[m].Right;
+        }
+      }
+    }
+
+    if (!CacheEntry) {
+      return std::nullopt;
+    } else {
+        // verify hash
+        auto hash = XXH3_64bits((void*)GuestRIP, CacheEntry->GuestLength);
+        if (hash != CacheEntry->GuestHash) {
+          LogMan::Msg::IFmt("AOTIR: hash check failed {:x}\n", GuestRIP);
+          return std::nullopt;
+        }
+
+        VERBOSE_LOG("Found {:x} {:x} in cache", GuestRIP, OffsetRIP);
+        return IRCacheResult {
+          .IRList = CacheEntry->GetIRData(),
+          .RAData = CacheEntry->GetRAData(),
+          .StartAddr = GuestRIP,
+          .Length = CacheEntry->GuestLength,
+        };
+    }
+  }
+
+  void AOTIRCache::Insert(uint64_t OffsetRIP, uint64_t GuestRIP, uint64_t StartAddr, uint64_t Length, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData) {
+    
+    // process wide lock
+    std::lock_guard lk {Mutex};
+
+    // File lock
+    flock(IndexFD, LOCK_EX);
+
+    // Resize Index file if needed
+    {
+      auto NewFileSize = sizeof(AOTIRCacheIndex) + (Index->Count + 1) * sizeof(AOTIRCacheIndexEntry);
+
+      if (NewFileSize > Index->FileSize) {
+        LogMan::Msg::DFmt("resize Index: NewSize: {}, Index->FileSize: {}", Index->FileSize + INDEX_CHUNK_SIZE, Index->FileSize.load());
+        fallocate(IndexFD, 0, Index->FileSize.load(), INDEX_CHUNK_SIZE);
+        Index->FileSize += INDEX_CHUNK_SIZE;
+      }
+    }
+    
+    // Make sure we have all of the index mapped
+    if (Index->FileSize > IndexFileSize) {
+      auto OldSize = IndexFileSize.load();
+      IndexFileSize = Index->FileSize.load();
+      Index = (decltype(Index))mremap(Index, OldSize, IndexFileSize, MREMAP_MAYMOVE);
+
+      LogMan::Msg::DFmt("remapped Index: {}, IndexFileSize: {}", (void*)Index, IndexFileSize.load());
+      LOGMAN_THROW_A_FMT(Index != MAP_FAILED, "mremap failed {:x} {} {}", (void*)Index, OldSize, IndexFileSize.load());
+    }
+
+    // Make sure entry doesn't exist & find insert point
+    size_t InsertPoint = 0;
+
+    {
+      size_t m = 0;
+      auto Count = Index->Count.load();
+
+      while (m < Count) {
+        InsertPoint = m;
+        VERBOSE_LOG("Insert Looking {} {} {:x} l:{} r:{}", (uint8_t*)(&Index->Entries[m]) - (uint8_t*)Index, m, Index->Entries[m].GuestStart, Index->Entries[m].Left, Index->Entries[m].Right);
+
+        if (Index->Entries[m].GuestStart == OffsetRIP) {
+          flock(IndexFD, LOCK_UN);
+          // some other process got here already. Abort.
+          return;
+        } else if (Index->Entries[m].GuestStart < OffsetRIP) {
+          m = Index->Entries[m].Left;
+        } else {
+          m = Index->Entries[m].Right;
+        }
+      }
+    }
+
+
+    // Resize Data file if needed
+    auto RADataSize = RAData->Size();
+    auto DataSize = IRList->GetInlineSize() + RADataSize + 16;
+    auto DataSizeAligned = AlignUp(DataSize, 32);
+
+    bool NewChunk = false;
+    uint32_t ChunkNum = Data->ChunksUsed - 1;
+    uint32_t ChunkOffset = CHUNK_SIZE - Data->CurrentChunkFree;
+
+    if (DataSizeAligned > Data->CurrentChunkFree) {
+      LOGMAN_THROW_A_FMT(DataSizeAligned < CHUNK_SIZE, "IR {} size > {}", DataSizeAligned, CHUNK_SIZE);
+      auto WriteOffset = Data->ChunkOffsets[Data->ChunksUsed] = AlignUp(Data->WritePointer, FHU::FEX_PAGE_SIZE);
+
+      fallocate(DataFD, 0, WriteOffset, CHUNK_SIZE);
+
+      MappedDataChunks[Data->ChunksUsed] = (uint8_t*)mmap(nullptr, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, WriteOffset);
+      
+      LOGMAN_THROW_A_FMT(MappedDataChunks[Data->ChunksUsed] != MAP_FAILED, "mmap failed {} {:x}", DataFD, WriteOffset);
+
+      ChunkNum = Data->ChunksUsed;
+      ChunkOffset = 0;
+      NewChunk = true;
+    }
+
+    auto hash = XXH3_64bits((void*)GuestRIP, Length);
+
+    uint8_t *Destination = MappedDataChunks[ChunkNum] + ChunkOffset;
+
+    memcpy(Destination, &hash, sizeof(hash)); Destination += sizeof(hash);
+    memcpy(Destination, &Length, sizeof(Length)); Destination += sizeof(Length);
+
+    // Copy RAData and IRList to the Data file
+    RAData->Serialize(Destination); Destination += RADataSize;
+    IRList->Serialize(Destination);
+
+    std::atomic_thread_fence(std::memory_order_release);
+
+    // Update Data file
+    // If process crashes after here, the file might contain some junk, but won't be corrupted
+    if (NewChunk) {
+      Data->WritePointer = Data->ChunkOffsets[Data->ChunksUsed];
+      Data->ChunksUsed++;
+      Data->CurrentChunkFree = CHUNK_SIZE;
+    }
+
+    Data->CurrentChunkFree -= DataSizeAligned;
+    Data->WritePointer += DataSizeAligned;
+
+    // Update the index
+    {
+      auto Count = Index->Count.load();
+
+      auto NewEntry = Count;
+
+      Index->Entries[NewEntry].GuestStart = OffsetRIP;
+      Index->Entries[NewEntry].Left = UINT32_MAX;
+      Index->Entries[NewEntry].Right = UINT32_MAX;
+      Index->Entries[NewEntry].DataOffset = ChunkNum * CHUNK_SIZE + ChunkOffset;
+
+      if (NewEntry != 0) {
+        std::atomic_thread_fence(std::memory_order_release);
+
+        // Increase Index Count. If process exits here, this index number will be wasted, but the index file won't be corrupted
+        Index->Count++;
+
+        std::atomic_thread_fence(std::memory_order_release);
+
+        // Link the index
+        if (Index->Entries[InsertPoint].GuestStart < OffsetRIP) {
+          Index->Entries[InsertPoint].Left = NewEntry;
+        } else {
+          Index->Entries[InsertPoint].Right = NewEntry;
+        }
+
+        VERBOSE_LOG("Inserted {} after {} left {} right {}", NewEntry, m2, Index->Entries[m2].Left, Index->Entries[m2].Right);
+
+        std::atomic_thread_fence(std::memory_order_release);
+      } else {
+        // First entry
+        std::atomic_thread_fence(std::memory_order_release);
+
+        Index->Count = 1;
+      }
+    }
+        
+    // All done, unlock file
+    flock(IndexFD, LOCK_UN);
+
+    VERBOSE_LOG("Inserted {:x} {:x} to cache", GuestRIP, OffsetRIP);
+  }
+
+  IR::RegisterAllocationData *AOTIRCacheEntry::GetRAData() {
     return (IR::RegisterAllocationData *)InlineData;
   }
 
-  IR::IRListView *AOTIRInlineEntry::GetIRData() {
+  IR::IRListView *AOTIRCacheEntry::GetIRData() {
     auto RAData = GetRAData();
-    auto Offset = RAData->Size(RAData->MapCount);
+    auto Offset = RAData->Size();
 
     return (IR::IRListView *)&InlineData[Offset];
-  }
-
-  void AOTIRCaptureCacheEntry::AppendAOTIRCaptureCache(uint64_t GuestRIP, uint64_t Start, uint64_t Length, uint64_t Hash, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData) {
-    auto Inserted = Index.emplace(GuestRIP, Stream->tellp());
-
-    if (Inserted.second) {
-      //GuestHash
-      Stream->write((const char*)&Hash, sizeof(Hash));
-
-      //GuestLength
-      Stream->write((const char*)&Length, sizeof(Length));
-
-      RAData->Serialize(*Stream);
-
-      // IRData (inline)
-      IRList->Serialize(*Stream);
-    }
-  }
-
-  static bool readAll(int fd, void *data, size_t size) {
-    int rv = read(fd, data, size);
-
-    if (rv != size)
-      return false;
-    else
-      return true;
-  }
-
-  static bool LoadAOTIRCache(AOTIRCacheEntry *Entry, int streamfd) {
-    uint64_t tag;
-
-    if (!readAll(streamfd, (char*)&tag, sizeof(tag)) || tag != FEXCore::IR::AOTIR_COOKIE)
-      return false;
-
-    std::string Module;
-    uint64_t ModSize;
-    uint64_t IndexSize;
-
-    lseek(streamfd, -sizeof(ModSize), SEEK_END);
-
-    if (!readAll(streamfd,  (char*)&ModSize, sizeof(ModSize)))
-      return false;
-
-    Module.resize(ModSize);
-
-    lseek(streamfd, -sizeof(ModSize) - ModSize, SEEK_END);
-
-    if (!readAll(streamfd,  (char*)&Module[0], Module.size()))
-      return false;
-
-    if (Entry->FileId != Module) {
-      return false;
-    }
-
-    lseek(streamfd, -sizeof(ModSize) - ModSize - sizeof(IndexSize), SEEK_END);
-
-    if (!readAll(streamfd,  (char*)&IndexSize, sizeof(IndexSize)))
-      return false;
-
-    struct stat fileinfo;
-    if (fstat(streamfd, &fileinfo) < 0)
-      return false;
-    size_t Size = (fileinfo.st_size + 4095) & ~4095;
-
-    size_t IndexOffset = fileinfo.st_size - IndexSize -sizeof(ModSize) - ModSize - sizeof(IndexSize);
-
-    void *FilePtr = FEXCore::Allocator::mmap(nullptr, Size, PROT_READ, MAP_SHARED, streamfd, 0);
-
-    if (FilePtr == MAP_FAILED) {
-      return false;
-    }
-
-    auto Array = (AOTIRInlineIndex *)((char*)FilePtr + IndexOffset);
-
-    LOGMAN_THROW_A_FMT(Entry->Array == nullptr && Entry->FilePtr == nullptr, "Entry must not be initialized here");
-    Entry->Array = Array;
-    Entry->FilePtr = FilePtr;
-    Entry->Size = Size;
-
-    LogMan::Msg::DFmt("AOTIR: Module {} has {} functions", Module, Array->Count);
-
-    return true;
-  }
-
-  void AOTIRCaptureCache::FinalizeAOTIRCache() {
-    AOTIRCaptureCacheWriteoutQueue_Flush();
-
-    std::unique_lock lk(AOTIRCacheLock);
-
-    for (auto& [String, Entry] : AOTIRCaptureCacheMap) {
-      if (!Entry.Stream) {
-        continue;
-      }
-
-      const auto ModSize = String.size();
-      auto &stream = Entry.Stream;
-
-      // pad to 32 bytes
-      constexpr char Zero = 0;
-      while(stream->tellp() & 31)
-        stream->write(&Zero, 1);
-
-      // AOTIRInlineIndex
-      const auto FnCount = Entry.Index.size();
-      const size_t DataBase = -stream->tellp();
-
-      stream->write((const char*)&FnCount, sizeof(FnCount));
-      stream->write((const char*)&DataBase, sizeof(DataBase));
-
-      for (const auto& [GuestStart, DataOffset] : Entry.Index) {
-        //AOTIRInlineIndexEntry
-
-        // GuestStart
-        stream->write((const char*)&GuestStart, sizeof(GuestStart));
-
-        // DataOffset
-        stream->write((const char*)&DataOffset, sizeof(DataOffset));
-      }
-
-      // End of file header
-      const auto IndexSize = FnCount * sizeof(FEXCore::IR::AOTIRInlineIndexEntry) + sizeof(DataBase) + sizeof(FnCount);
-      stream->write((const char*)&IndexSize, sizeof(IndexSize));
-      stream->write(String.c_str(), ModSize);
-      stream->write((const char*)&ModSize, sizeof(ModSize));
-
-      // Close the stream
-      stream->close();
-
-      // Rename the file to atomically update the cache with the temporary file
-      AOTIRRenamer(String);
-    }
-  }
-
-  void AOTIRCaptureCache::AOTIRCaptureCacheWriteoutQueue_Flush() {
-    {
-      std::shared_lock lk{AOTIRCaptureCacheWriteoutLock};
-      if (AOTIRCaptureCacheWriteoutQueue.size() == 0) {
-        AOTIRCaptureCacheWriteoutFlusing.store(false);
-        return;
-      }
-    }
-
-    for (;;) {
-      AOTIRCaptureCacheWriteoutLock.lock();
-      std::function<void()> fn = std::move(AOTIRCaptureCacheWriteoutQueue.front());
-      bool MaybeEmpty = false;
-      AOTIRCaptureCacheWriteoutQueue.pop();
-      MaybeEmpty = AOTIRCaptureCacheWriteoutQueue.size() == 0;
-      AOTIRCaptureCacheWriteoutLock.unlock();
-
-      fn();
-      if (MaybeEmpty) {
-        std::shared_lock lk{AOTIRCaptureCacheWriteoutLock};
-        if (AOTIRCaptureCacheWriteoutQueue.size() == 0) {
-          AOTIRCaptureCacheWriteoutFlusing.store(false);
-          return;
-        }
-      }
-    }
-
-    LOGMAN_MSG_A_FMT("Must never get here");
-  }
-
-  void AOTIRCaptureCache::AOTIRCaptureCacheWriteoutQueue_Append(const std::function<void()> &fn) {
-    bool Flush = false;
-
-    {
-      std::unique_lock lk{AOTIRCaptureCacheWriteoutLock};
-      AOTIRCaptureCacheWriteoutQueue.push(fn);
-      if (AOTIRCaptureCacheWriteoutQueue.size() > 10000) {
-        Flush = true;
-      }
-    }
-
-    bool test_val = false;
-    if (Flush && AOTIRCaptureCacheWriteoutFlusing.compare_exchange_strong(test_val, true)) {
-      AOTIRCaptureCacheWriteoutQueue_Flush();
-    }
-  }
-
-  void AOTIRCaptureCache::WriteFilesWithCode(std::function<void(const std::string& fileid, const std::string& filename)> Writer) {
-    std::shared_lock lk(AOTIRCacheLock);
-    for( const auto &Entry: AOTIRCache) {
-      if (Entry.second.ContainsCode) {
-        Writer(Entry.second.FileId, Entry.second.Filename);
-      }
-    }
-  }
-
-  AOTIRCaptureCache::PreGenerateIRFetchResult AOTIRCaptureCache::PreGenerateIRFetch(uint64_t GuestRIP, FEXCore::IR::IRListView *IRList) {
-    auto AOTIRCacheEntry = CTX->SyscallHandler->LookupNamedRegion(GuestRIP);
-
-    PreGenerateIRFetchResult Result{};
-
-    if (AOTIRCacheEntry.Entry) {
-      AOTIRCacheEntry.Entry->ContainsCode = true;
-
-      if (IRList == nullptr && CTX->Config.AOTIRLoad()) {
-        auto Mod = AOTIRCacheEntry.Entry->Array;
-
-        if (Mod != nullptr)
-        {
-          auto AOTEntry = Mod->Find(GuestRIP - AOTIRCacheEntry.VAFileStart);
-
-          if (AOTEntry) {
-            // verify hash
-            auto MappedStart = GuestRIP;
-            auto hash = XXH3_64bits((void*)MappedStart, AOTEntry->GuestLength);
-            if (hash == AOTEntry->GuestHash) {
-              Result.IRList = AOTEntry->GetIRData();
-              //LogMan::Msg::DFmt("using {} + {:x} -> {:x}\n", file->second.fileid, AOTEntry->first, GuestRIP);
-
-              Result.RAData = AOTEntry->GetRAData()->CreateCopy();
-              Result.DebugData = new FEXCore::Core::DebugData();
-              Result.StartAddr = MappedStart;
-              Result.Length = AOTEntry->GuestLength;
-              Result.GeneratedIR = true;
-            } else {
-              LogMan::Msg::IFmt("AOTIR: hash check failed {:x}\n", MappedStart);
-            }
-          } else {
-            //LogMan::Msg::IFmt("AOTIR: Failed to find {:x}, {:x}, {}\n", GuestRIP, GuestRIP - file->second.Start + file->second.Offset, file->second.fileid);
-          }
-        }
-      }
-    }
-
-    return Result;
-  }
-
-  bool AOTIRCaptureCache::PostCompileCode(
-    FEXCore::Core::InternalThreadState *Thread,
-    void* CodePtr,
-    uint64_t GuestRIP,
-    uint64_t StartAddr,
-    uint64_t Length,
-    FEXCore::IR::RegisterAllocationData::UniquePtr RAData,
-    FEXCore::IR::IRListView *IRList,
-    FEXCore::Core::DebugData *DebugData,
-    bool GeneratedIR) {
-
-    // Both generated ir and LibraryJITName need a named region lookup
-    if (GeneratedIR || CTX->Config.LibraryJITNaming() || CTX->Config.GDBSymbols()) {
-
-      auto AOTIRCacheEntry = CTX->SyscallHandler->LookupNamedRegion(GuestRIP);
-
-      if (AOTIRCacheEntry.Entry) {
-        if (DebugData && CTX->Config.LibraryJITNaming()) {
-          CTX->Symbols.RegisterNamedRegion(CodePtr, DebugData->HostCodeSize, AOTIRCacheEntry.Entry->Filename);
-        }
-
-        if (CTX->Config.GDBSymbols()) {
-          GDBJITRegister(AOTIRCacheEntry.Entry, AOTIRCacheEntry.VAFileStart, GuestRIP, (uintptr_t)CodePtr, DebugData);
-        }
-
-        // Add to AOT cache if aot generation is enabled
-        if (GeneratedIR && RAData &&
-            (CTX->Config.AOTIRCapture() || CTX->Config.AOTIRGenerate())) {
-
-          auto hash = XXH3_64bits((void*)StartAddr, Length);
-
-          auto LocalRIP = GuestRIP - AOTIRCacheEntry.VAFileStart;
-          auto LocalStartAddr = StartAddr - AOTIRCacheEntry.VAFileStart;
-          auto FileId = AOTIRCacheEntry.Entry->FileId;
-          // The underlying pointer and the unique_ptr deleter for RAData must
-          // be marshalled separately to the lambda below. Otherwise, the
-          // lambda can't be used as an std::function due to being non-copyable
-          auto RADataCopy = RAData->CreateCopy();
-          auto RADataCopyDeleter = RADataCopy.get_deleter();
-          auto IRListCopy = IRList->CreateCopy();
-          AOTIRCaptureCacheWriteoutQueue_Append([this, LocalRIP, LocalStartAddr, Length, hash, IRListCopy, RADataCopy=RADataCopy.release(), RADataCopyDeleter, FileId]() {
-
-            // It is guaranteed via AOTIRCaptureCacheWriteoutLock and AOTIRCaptureCacheWriteoutFlusing that this will not run concurrently
-            // Memory coherency is guaranteed via AOTIRCaptureCacheWriteoutLock
-            
-            auto *AotFile = &AOTIRCaptureCacheMap[FileId];
-
-            if (!AotFile->Stream) {
-              AotFile->Stream = AOTIRWriter(FileId);
-              uint64_t tag = FEXCore::IR::AOTIR_COOKIE;
-              AotFile->Stream->write((char*)&tag, sizeof(tag));
-            }
-            AotFile->AppendAOTIRCaptureCache(LocalRIP, LocalStartAddr, Length, hash, IRListCopy, RADataCopy);
-            RADataCopyDeleter(RADataCopy);
-            delete IRListCopy;
-          });
-
-          if (CTX->Config.AOTIRGenerate()) {
-            // cleanup memory and early exit here -- we're not running the application
-            Thread->CPUBackend->ClearCache();
-            return true;
-          }
-        }
-      }
-
-      // Insert to caches if we generated IR
-      if (GeneratedIR) {
-        if (CTX->GetGdbServerStatus()) {
-          // Add to thread local ir cache
-          Core::LocalIREntry Entry = {StartAddr, Length, decltype(Entry.IR)(IRList), std::move(RAData), decltype(Entry.DebugData)(DebugData)};
-          
-          std::lock_guard<std::recursive_mutex> lk(Thread->LookupCache->WriteLock);
-          Thread->DebugStore.insert({GuestRIP, std::move(Entry)});
-        }
-        else {
-          // If the IR doesn't need to be retained then we can just delete it now
-          delete DebugData;
-          delete IRList;
-        }
-      }
-    }
-
-    return false;
-  }
-
-  AOTIRCacheEntry *AOTIRCaptureCache::LoadAOTIRCacheEntry(const std::string &filename) {
-    auto base_filename = std::filesystem::path(filename).filename().string();
-
-    if (!base_filename.empty()) {
-      auto filename_hash = XXH3_64bits(filename.c_str(), filename.size());
-
-      auto fileid = base_filename + "-" + std::to_string(filename_hash) + "-";
-
-      // append optimization flags to the fileid
-      fileid += (CTX->Config.SMCChecks == FEXCore::Config::CONFIG_SMC_FULL) ? "S" : "s";
-      fileid += CTX->Config.TSOEnabled ? "T" : "t";
-      fileid += CTX->Config.ABILocalFlags ? "L" : "l";
-      fileid += CTX->Config.ABINoPF ? "p" : "P";
-
-      std::unique_lock lk(AOTIRCacheLock);
-
-      auto Inserted = AOTIRCache.insert({fileid, AOTIRCacheEntry { .FileId = fileid, .Filename = filename }});
-      auto Entry = &(Inserted.first->second);
-
-      LOGMAN_THROW_A_FMT(Entry->Array == nullptr, "Duplicate LoadAOTIRCacheEntry");
-
-      if (CTX->Config.AOTIRLoad && AOTIRLoader) {
-        auto streamfd = AOTIRLoader(fileid);
-        if (streamfd != -1) {
-          FEXCore::IR::LoadAOTIRCache(Entry, streamfd);
-          close(streamfd);
-        }
-      }
-      return Entry;
-    }
-
-    return nullptr;
-  }
-
-  void AOTIRCaptureCache::UnloadAOTIRCacheEntry(AOTIRCacheEntry *Entry) {
-    LOGMAN_THROW_A_FMT(Entry != nullptr, "Removing not existing entry");
-
-    if (Entry->Array) {
-      FEXCore::Allocator::munmap(Entry->FilePtr, Entry->Size);
-      Entry->Array = nullptr;
-      Entry->FilePtr = nullptr;
-      Entry->Size = 0;
-    }
   }
 }

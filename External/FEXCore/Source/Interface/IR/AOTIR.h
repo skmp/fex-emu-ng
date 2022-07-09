@@ -34,13 +34,20 @@ namespace FEXCore::IR {
     Cookie |= CookieText[1];
     Cookie <<= 8;
     Cookie |= CookieText[0];
-
     return Cookie;
-  };
-  constexpr static uint32_t AOTIR_VERSION = 0x0000'00004;
-  constexpr static uint64_t AOTIR_COOKIE = COOKIE_VERSION("FEXI", AOTIR_VERSION);
 
-  struct AOTIRInlineEntry {
+  };
+
+  constexpr static uint32_t AOTIR_VERSION = 0x0000'00005;
+  constexpr static uint64_t AOTIR_INDEX_COOKIE = COOKIE_VERSION("FEXI", AOTIR_VERSION);
+  constexpr static uint64_t AOTIR_DATA_COOKIE = COOKIE_VERSION("FEXD", AOTIR_VERSION);
+
+  constexpr static uint64_t CHUNK_SIZE = 16 * 1024 * 1024;
+  constexpr static uint64_t MAX_CHUNKS = 1024;
+
+  constexpr static uint64_t INDEX_CHUNK_SIZE = 64 * 1024;
+
+  struct AOTIRCacheEntry {
     uint64_t GuestHash;
     uint64_t GuestLength;
 
@@ -51,95 +58,58 @@ namespace FEXCore::IR {
     IR::IRListView *GetIRData();
   };
 
-  struct AOTIRInlineIndexEntry {
+  struct AOTIRCacheIndexEntry {
     uint64_t GuestStart;
+    uint32_t Left, Right;
     uint64_t DataOffset;
   };
 
-  struct AOTIRInlineIndex {
-    uint64_t Count;
-    uint64_t DataBase;
-    AOTIRInlineIndexEntry Entries[0];
+  struct AOTIRCacheIndex {
+    uint64_t Tag;
+    std::atomic<uint64_t> FileSize;
 
-    AOTIRInlineEntry *Find(uint64_t GuestStart);
-    AOTIRInlineEntry *GetInlineEntry(uint64_t DataOffset);
+    std::atomic<uint64_t> Count;
+
+    AOTIRCacheIndexEntry Entries[0];
   };
 
-  struct AOTIRCaptureCacheEntry {
-    std::unique_ptr<std::ofstream> Stream;
-    std::map<uint64_t, uint64_t> Index;
+  struct AOTIRCacheData {
+    uint64_t Tag;
+    uint64_t ChunkOffsets[MAX_CHUNKS];
 
-    void AppendAOTIRCaptureCache(uint64_t GuestRIP, uint64_t Start, uint64_t Length, uint64_t Hash, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData);
+    std::atomic<uint64_t> ChunksUsed;
+    std::atomic<uint64_t> CurrentChunkFree;
+
+    std::atomic<uint64_t> WritePointer;
   };
 
-  struct AOTIRCacheEntry {
-    AOTIRInlineIndex *Array;
-    void *FilePtr;
-    size_t Size;
+  struct IRCacheResult {
+    FEXCore::IR::IRListView *IRList {};
+    FEXCore::IR::RegisterAllocationData *RAData {};
+    uint64_t StartAddr {};
+    uint64_t Length {};
   };
 
-  using AOTCacheType = std::unordered_map<std::string, FEXCore::Core::NamedRegion>;
-
-  class AOTIRCaptureCache final {
+  class AOTIRCache {
     public:
-
-      AOTIRCaptureCache(FEXCore::Context::Context *ctx) : CTX {ctx} {}
-
-      void FinalizeAOTIRCache();
-      void AOTIRCaptureCacheWriteoutQueue_Flush();
-      void AOTIRCaptureCacheWriteoutQueue_Append(const std::function<void()> &fn);
-      void WriteFilesWithCode(std::function<void(const std::string& fileid, const std::string& filename)> Writer);
-
-      struct PreGenerateIRFetchResult {
-        FEXCore::IR::IRListView *IRList {};
-        FEXCore::IR::RegisterAllocationData::UniquePtr RAData {};
-        FEXCore::Core::DebugData *DebugData {};
-        uint64_t StartAddr {};
-        uint64_t Length {};
-        bool GeneratedIR {};
-      };
-      [[nodiscard]] PreGenerateIRFetchResult LoadIR(uint64_t GuestRIP);
-
-      bool CacheIR(FEXCore::Core::InternalThreadState *Thread,
-        void* CodePtr,
-        uint64_t GuestRIP,
-        uint64_t StartAddr,
-        uint64_t Length,
-        FEXCore::IR::RegisterAllocationData::UniquePtr RAData,
-        FEXCore::IR::IRListView *IRList,
-        FEXCore::Core::DebugData *DebugData,
-        bool GeneratedIR);
-
-      AOTIRCacheEntry *LoadAOTIRCacheEntry(const std::string &filename);
-      void UnloadAOTIRCacheEntry(AOTIRCacheEntry *Entry);
-
-      // Callbacks
-      void SetAOTIRLoader(std::function<int(const std::string&)> CacheReader) {
-        AOTIRLoader = CacheReader;
-      }
-
-      void SetAOTIRWriter(std::function<std::unique_ptr<std::ofstream>(const std::string&)> CacheWriter) {
-        AOTIRWriter = CacheWriter;
-      }
-
-      void SetAOTIRRenamer(std::function<void(const std::string&)> CacheRenamer) {
-        AOTIRRenamer = CacheRenamer;
-      }
+      static std::unique_ptr<AOTIRCache> LoadFile(int IndexFD, int DataFD);
+      ~AOTIRCache();
+      std::optional<IRCacheResult> Find(uint64_t OffsetRIP, uint64_t GuestRIP);
+      void Insert(uint64_t OffsetRIP, uint64_t GuestRIP, uint64_t StartAddr, uint64_t Length, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData);
 
     private:
-      FEXCore::Context::Context *CTX;
+      std::shared_mutex Mutex;
 
-      std::shared_mutex AOTIRCacheLock;
-      std::shared_mutex AOTIRCaptureCacheWriteoutLock;
-      std::atomic<bool> AOTIRCaptureCacheWriteoutFlusing;
+      AOTIRCacheIndex *Index;
+      std::atomic<uint64_t> IndexFileSize;
 
-      std::queue<std::function<void()>> AOTIRCaptureCacheWriteoutQueue;
+      int IndexFD;
 
-      FEXCore::IR::AOTCacheType AOTIRCache;
+      AOTIRCacheData *Data;
+      int DataFD;
 
-      std::function<int(const std::string&)> AOTIRLoader;
-      std::function<std::unique_ptr<std::ofstream>(const std::string&)> AOTIRWriter;
-      std::function<void(const std::string&)> AOTIRRenamer;
-      std::unordered_map<std::string, FEXCore::IR::AOTIRCaptureCacheEntry> AOTIRCaptureCacheMap;
+      std::atomic<uint8_t *> MappedDataChunks[MAX_CHUNKS];
+      
+      AOTIRCache() {}
   };
 }

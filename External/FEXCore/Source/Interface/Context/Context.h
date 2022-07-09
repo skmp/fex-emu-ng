@@ -1,12 +1,12 @@
 #pragma once
 
 #include "Common/JitSymbols.h"
+#include "FEXCore/Core/NamedRegion.h"
 #include "Interface/Core/CPUID.h"
 #include "Interface/Core/HostFeatures.h"
 #include "Interface/Core/X86HelperGen.h"
-#include "Interface/Core/ObjectCache/ObjectCacheService.h"
+//#include "Interface/Core/ObjectCache/ObjectCacheService.h"
 #include "Interface/Core/Dispatcher/Dispatcher.h"
-#include "Interface/IR/AOTIR.h"
 #include <FEXCore/Config/Config.h>
 #include <FEXCore/Core/Context.h>
 #include <FEXCore/Core/CoreState.h>
@@ -188,11 +188,13 @@ namespace FEXCore::Context {
     void RemoveCustomIREntrypoint(uintptr_t Entrypoint);
 
     // Debugger interface
+#if FIXME
     void CompileRIP(FEXCore::Core::InternalThreadState *Thread, uint64_t RIP);
     uint64_t GetThreadCount() const;
     FEXCore::Core::RuntimeStats *GetRuntimeStatsForThread(uint64_t Thread);
     bool GetDebugDataForRIP(uint64_t RIP, FEXCore::Core::DebugData *Data);
     bool FindHostCodeForRIP(uint64_t RIP, uint8_t **Code);
+#endif
 
     struct GenerateIRResult {
       FEXCore::IR::IRListView* IRList;
@@ -288,24 +290,8 @@ namespace FEXCore::Context {
     // Public for threading
     void ExecutionThread(FEXCore::Core::InternalThreadState *Thread);
 
-    void FinalizeAOTIRCache() {
-      IRCaptureCache.FinalizeAOTIRCache();
-    }
-
-    void WriteFilesWithCode(std::function<void(const std::string& fileid, const std::string& filename)> Writer) {
-      IRCaptureCache.WriteFilesWithCode(Writer);
-    }
-
-    void SetAOTIRLoader(std::function<int(const std::string&)> CacheReader) {
-      IRCaptureCache.SetAOTIRLoader(CacheReader);
-    }
-
-    void SetAOTIRWriter(std::function<std::unique_ptr<std::ofstream>(const std::string&)> CacheWriter) {
-      IRCaptureCache.SetAOTIRWriter(CacheWriter);
-    }
-
-    void SetAOTIRRenamer(std::function<void(const std::string&)> CacheRenamer) {
-      IRCaptureCache.SetAOTIRRenamer(CacheRenamer);
+    void SetAOTIROpener(AOTIROpenerHandler CacheReader) {
+      CacheOpener = CacheReader;
     }
 
     FEXCore::Utils::PooledAllocatorMMap OpDispatcherAllocator;
@@ -347,8 +333,9 @@ namespace FEXCore::Context {
     std::mutex ExitMutex;
     std::unique_ptr<GdbServer> DebugServer;
 
-    IR::AOTIRCaptureCache IRCaptureCache;
-    std::unique_ptr<FEXCore::CodeSerialize::CodeObjectSerializeService> CodeObjectCacheService;
+    AOTIROpenerHandler CacheOpener;
+    
+    //std::unique_ptr<FEXCore::CodeSerialize::CodeObjectSerializeService> CodeObjectCacheService;
 
     bool StartPaused = false;
     bool IsMemoryShared = false;

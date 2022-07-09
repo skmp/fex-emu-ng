@@ -604,6 +604,11 @@ SyscallHandler::SyscallHandler(FEXCore::Context::Context *_CTX, FEX::HLE::Signal
 }
 
 SyscallHandler::~SyscallHandler() {
+  for (auto &Res: VMATracking.MappedResources) {
+    if (Res.second.NamedRegion) {
+      FEXCore::Context::UnloadNamedRegion(CTX, Res.second.NamedRegion);
+    }
+  }
   FEXCore::Allocator::munmap(reinterpret_cast<void*>(DataSpace), DataSpaceMaxSize);
 }
 

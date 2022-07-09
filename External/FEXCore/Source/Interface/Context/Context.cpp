@@ -1,4 +1,6 @@
 #include "Common/Paths.h"
+#include <FEXCore/HLE/SourcecodeResolver.h>
+#include "Interface/IR/AOTIR.h"
 #include "FEXCore/Core/NamedRegion.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/Core.h"
@@ -168,24 +170,8 @@ namespace FEXCore::Context {
     return CTX->CPUID.RunFunctionName(Function, Leaf, CPU);
   }
 
-  void SetAOTIRLoader(FEXCore::Context::Context *CTX, std::function<int(const std::string&)> CacheReader) {
-    CTX->SetAOTIRLoader(CacheReader);
-  }
-
-  void SetAOTIRWriter(FEXCore::Context::Context *CTX, std::function<std::unique_ptr<std::ofstream>(const std::string&)> CacheWriter) {
-    CTX->SetAOTIRWriter(CacheWriter);
-  }
-
-  void SetAOTIRRenamer(FEXCore::Context::Context *CTX, std::function<void(const std::string&)> CacheRenamer) {
-    CTX->SetAOTIRRenamer(CacheRenamer);
-  }
-
-  void FinalizeAOTIRCache(FEXCore::Context::Context *CTX) {
-    CTX->FinalizeAOTIRCache();
-  }
-
-  void WriteFilesWithCode(FEXCore::Context::Context *CTX, std::function<void(const std::string& fileid, const std::string& filename)> Writer) {
-    CTX->WriteFilesWithCode(Writer);
+  void SetAOTIROpener(FEXCore::Context::Context *CTX, AOTIROpenerHandler CacheReader) {
+    CTX->SetAOTIROpener(CacheReader);
   }
 
   Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string &Name) {
@@ -200,6 +186,7 @@ namespace FEXCore::Context {
   }
 
 namespace Debug {
+  #if FIXME
   void CompileRIP(FEXCore::Context::Context *CTX, uint64_t RIP) {
     CTX->CompileRIP(CTX->ParentThread, RIP);
   }
@@ -218,7 +205,7 @@ namespace Debug {
   bool FindHostCodeForRIP(FEXCore::Context::Context *CTX, uint64_t RIP, uint8_t **Code) {
     return CTX->FindHostCodeForRIP(RIP, Code);
   }
-
+#endif
   // XXX:
   // bool FindIRForRIP(FEXCore::Context::Context *CTX, uint64_t RIP, FEXCore::IR::IntrusiveIRList **ir) {
   //   return CTX->FindIRForRIP(RIP, ir);
