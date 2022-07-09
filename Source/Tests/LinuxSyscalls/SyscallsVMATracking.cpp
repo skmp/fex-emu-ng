@@ -351,8 +351,8 @@ uintptr_t SyscallHandler::VMATracking::ClearShmUnsafe(FEXCore::Context::Context 
   do {
     if (Entry->second.Resource == Resource) {
       if (ListRemove(&Entry->second)) {
-        if (Entry->second.Resource->AOTIRCacheEntry) {
-          FEXCore::Context::UnloadNamedRegion(CTX, Entry->second.Resource->AOTIRCacheEntry);
+        if (Entry->second.Resource->NamedRegion) {
+          FEXCore::Context::UnloadNamedRegion(CTX, Entry->second.Resource->NamedRegion);
         }
         MappedResources.erase(Entry->second.Resource->Iterator);
       }

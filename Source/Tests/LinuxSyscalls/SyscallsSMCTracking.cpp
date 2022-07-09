@@ -173,7 +173,7 @@ FEXCore::HLE::NamedRegionLookupResult SyscallHandler::LookupNamedRegion(uint64_t
   auto Entry = _SyscallHandler->VMATracking.LookupVMAUnsafe(GuestAddr);
 
   if (Entry != _SyscallHandler->VMATracking.VMAs.end()) {
-    rv.Entry = Entry->second.Resource ? Entry->second.Resource->AOTIRCacheEntry : nullptr;
+    rv.Entry = Entry->second.Resource ? Entry->second.Resource->NamedRegion : nullptr;
     rv.VAFileStart = Entry->second.Base - Entry->second.Offset;
   }
 

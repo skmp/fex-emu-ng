@@ -3,7 +3,7 @@
 #include <string>
 #include <shared_mutex>
 
-#include <FEXCore/Core/NamedRegion.h>
+#include "FEXCore/IR/IR.h"
 #include <FEXHeaderUtils/ScopedSignalMask.h>
 
 namespace FEXCore {

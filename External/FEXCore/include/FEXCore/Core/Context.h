@@ -1,5 +1,6 @@
 #pragma once
 #include <functional>
+#include <optional>
 #include <stdint.h>
 #include <string>
 
@@ -72,6 +73,12 @@ namespace FEXCore::Context {
 
   using ExitHandler = std::function<void(uint64_t ThreadId, FEXCore::Context::ExitReason)>;
 
+  struct AOTIRFDSet {
+    int IndexFD;
+    int DataFD;
+  };
+
+  using AOTIROpenerHandler = std::function<std::optional<AOTIRFDSet>(const std::string& fileid, const std::string& filename)>;
   /**
    * @brief This initializes internal FEXCore state that is shared between contexts and requires overhead to setup
    */
@@ -268,12 +275,8 @@ namespace FEXCore::Context {
   FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string& Name);
   FEX_DEFAULT_VISIBILITY void UnloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *Entry);
 
-  FEX_DEFAULT_VISIBILITY void SetAOTIRLoader(FEXCore::Context::Context *CTX, std::function<int(const std::string&)> CacheReader);
-  FEX_DEFAULT_VISIBILITY void SetAOTIRWriter(FEXCore::Context::Context *CTX, std::function<std::unique_ptr<std::ofstream>(const std::string&)> CacheWriter);
-  FEX_DEFAULT_VISIBILITY void SetAOTIRRenamer(FEXCore::Context::Context *CTX, std::function<void(const std::string&)> CacheRenamer);
+  FEX_DEFAULT_VISIBILITY void SetAOTIROpener(FEXCore::Context::Context *CTX, AOTIROpenerHandler CacheOpener);
 
-  FEX_DEFAULT_VISIBILITY void FinalizeAOTIRCache(FEXCore::Context::Context *CTX);
-  FEX_DEFAULT_VISIBILITY void WriteFilesWithCode(FEXCore::Context::Context *CTX, std::function<void(const std::string& fileid, const std::string& filename)> Writer);
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length);
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length, std::function<void(uint64_t start, uint64_t Length)> callback);
   FEX_DEFAULT_VISIBILITY void MarkMemoryShared(FEXCore::Context::Context *CTX);

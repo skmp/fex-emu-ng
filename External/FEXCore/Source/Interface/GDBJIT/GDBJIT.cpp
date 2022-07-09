@@ -1,5 +1,7 @@
 #include "GDBJIT.h"
 
+#include "Interface/IR/AOTIR.h"
+#include <FEXCore/Core/NamedRegion.h>
 #include <FEXCore/Debug/InternalThreadState.h>
 #include <FEXCore/HLE/SourcecodeResolver.h>
 #include <FEXCore/Utils/LogManager.h>

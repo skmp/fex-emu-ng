@@ -1,3 +1,5 @@
+#if FIXME
+
 #include "Interface/Core/ObjectCache/ObjectCacheService.h"
 
 #include <FEXCore/Config/Config.h>
@@ -83,3 +85,5 @@ namespace FEXCore::CodeSerialize {
     UnrelocatedAddressToEntryMap.clear();
 	}
 }
+
+#endif

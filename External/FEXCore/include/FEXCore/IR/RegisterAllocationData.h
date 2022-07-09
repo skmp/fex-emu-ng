@@ -49,6 +49,10 @@ class FEX_PACKED RegisterAllocationData {
       return sizeof(RegisterAllocationData) + NodeCount * sizeof(Map[0]);
     }
 
+    size_t Size() const {
+      return Size(MapCount);
+    }
+
     using UniquePtr = std::unique_ptr<FEXCore::IR::RegisterAllocationData, RegisterAllocationDataDeleter>;
 
     static UniquePtr Create(uint32_t NodeCount);
@@ -63,6 +67,16 @@ class FEX_PACKED RegisterAllocationData {
       bool _IsShared = true;
       stream.write((const char*)&_IsShared, sizeof(IsShared));
       stream.write((const char*)&Map[0], sizeof(Map[0]) * MapCount);
+    }
+
+    void Serialize(uint8_t *ptr) const {
+      memcpy(ptr, &SpillSlotCount, sizeof(SpillSlotCount)); ptr += sizeof(SpillSlotCount);
+      memcpy(ptr, &MapCount, sizeof(MapCount)); ptr += sizeof(MapCount);
+      // RAData (inline)
+      // In file, IsShared is always set
+      bool _IsShared = true;
+      memcpy(ptr, &_IsShared, sizeof(_IsShared)); ptr += sizeof(_IsShared);
+      memcpy(ptr, &Map[0], sizeof(Map[0]) * MapCount); ptr += sizeof(Map[0]) * MapCount;
     }
 };
 
