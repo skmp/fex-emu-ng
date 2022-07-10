@@ -187,55 +187,12 @@ FEXCore::HLE::NamedRegionLookupResult SyscallHandler::LookupNamedRegion(uint64_t
 
 
 static std::string GetElfFingerprint(int fd) {
-  static constexpr auto toHEX = "0123456789abcdef";
-  std::string fingerprint = "generic";
-
   ELFParser Elf;
-  if (Elf.ReadElf(fd)) {
-    for(const auto &Header: Elf.phdrs) {
-      if (Header.p_type == PT_NOTE && Header.p_filesz < 1024) {
-        uint8_t temp[Header.p_filesz];
-        pread(fd, temp, Header.p_filesz, Header.p_offset);
-
-        auto Available = Header.p_filesz;
-        auto Current = temp;
-        while (Available > (12 + 4)) {
-          auto note_hdr = (uint32_t *)Current;
-          Available -= 12;
-          Current += 12;
-          if (note_hdr[2] == NT_GNU_BUILD_ID && note_hdr[0] == 4 && memcmp(&note_hdr[3], "GNU", 4) == 0) {
-            Available -= 4;
-            Current += 4;
-
-            if (note_hdr[1] <= Available) {
-              fingerprint.resize(note_hdr[1] * 2);
-              for (uint32_t i = 0; i < note_hdr[1]; i++) {
-                auto val = *Current++;
-                fingerprint[i * 2 + 0] = toHEX[val >> 4];
-                fingerprint[i * 2 + 1] = toHEX[val & 15];
-              }
-              goto Exit;
-            } else {
-              break;
-            }
-          } else {
-            auto SkipCount = FEXCore::AlignUp(note_hdr[0], 4) + FEXCore::AlignUp(note_hdr[1], 4);
-
-            if (SkipCount <= Available) {
-              Available -= SkipCount;
-              Current += SkipCount;
-            } else {
-              break;
-            }
-          }
-        }
-      }
-    }
+  if (Elf.ReadElf(fd) && Elf.BuildID.size()) {
+    return std::move(Elf.BuildID);
+  } else {
+    return "generic";
   }
-
-  Exit:
-
-  return fingerprint;
 }
 
 // MMan Tracking
