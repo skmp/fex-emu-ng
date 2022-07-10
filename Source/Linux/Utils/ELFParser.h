@@ -24,6 +24,11 @@ struct ELFParser {
   std::string InterpreterElf;
   int fd {-1};
 
+  static bool pread_all(int fd, void *buf, size_t nbytes, __off_t offset) { 
+    return pread(fd, buf, nbytes, offset) == nbytes;
+  }
+
+  // This must not modify the file pointer or otherwise the state of the file
   bool ReadElf(int NewFD) {
     Closefd();
     static_assert(EI_CLASS == 4);
@@ -36,19 +41,8 @@ struct ELFParser {
       return false;
     }
 
-    // Get file size
-    off_t Size = lseek(fd, 0, SEEK_END);
-
-    if (Size < 4) {
-      // Likely invalid can't fit header
-      return false;
-    }
-
-    // Reset to beginning
-    lseek(fd, 0, SEEK_SET);
-
     uint8_t header[5];
-    if (pread(fd, header, sizeof(header), 0) == -1) {
+    if (!pread_all(fd, header, sizeof(header), 0)) {
       LogMan::Msg::EFmt("Failed to read elf header from '{}'", fd);
       return false;
     }
@@ -62,7 +56,7 @@ struct ELFParser {
 
     if (header[EI_CLASS] == ELFCLASS32) {
       Elf32_Ehdr hdr32;
-      if (pread(fd, &hdr32, sizeof(hdr32), 0) == -1) {
+      if (!pread_all(fd, &hdr32, sizeof(hdr32), 0)) {
         LogMan::Msg::EFmt("Failed to read Ehdr32 from '{}'", fd);
         return false;
       }
@@ -108,7 +102,7 @@ struct ELFParser {
 
       type = ::ELFLoader::ELFContainer::TYPE_X86_32;
     } else if (header[EI_CLASS] == ELFCLASS64) {
-      if (pread(fd, &ehdr, sizeof(ehdr), 0) == -1) {
+      if (!pread_all(fd, &ehdr, sizeof(ehdr), 0)) {
         LogMan::Msg::EFmt("Failed to read Ehdr64 from '{}'", fd);
         return false;
       }
@@ -148,7 +142,7 @@ struct ELFParser {
     if (type == ::ELFLoader::ELFContainer::TYPE_X86_32) {
       Elf32_Phdr phdrs32[ehdr.e_phnum];
 
-      if (pread(fd, phdrs32, sizeof(Elf32_Phdr) * ehdr.e_phnum, ehdr.e_phoff) == -1) {
+      if (!pread_all(fd, phdrs32, sizeof(Elf32_Phdr) * ehdr.e_phnum, ehdr.e_phoff)) {
         LogMan::Msg::EFmt("Failed to read phdr32 from '{}'", fd);
         return false;
       }
@@ -173,7 +167,7 @@ struct ELFParser {
     } else {
       phdrs.resize(ehdr.e_phnum);
 
-      if (pread(fd, &phdrs[0], sizeof(Elf64_Phdr) * ehdr.e_phnum, ehdr.e_phoff) == -1) {
+      if (!pread_all(fd, &phdrs[0], sizeof(Elf64_Phdr) * ehdr.e_phnum, ehdr.e_phoff)) {
         LogMan::Msg::EFmt("Failed to read phdr64 from '{}'", fd);
         return false;
       }
@@ -183,7 +177,7 @@ struct ELFParser {
       if (phdr.p_type == PT_INTERP) {
         InterpreterElf.resize(phdr.p_filesz);
 
-        if (pread(fd, &InterpreterElf[0], phdr.p_filesz, phdr.p_offset) == -1) {
+        if (!pread_all(fd, &InterpreterElf[0], phdr.p_filesz, phdr.p_offset)) {
           LogMan::Msg::EFmt("Failed to read interpreter from '{}'", fd);
           return false;
         }
