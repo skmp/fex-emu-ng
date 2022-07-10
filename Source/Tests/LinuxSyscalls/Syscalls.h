@@ -194,6 +194,9 @@ public:
   void LockBeforeFork();
   void UnlockAfterFork();
 
+  ///
+  void MarkMemoryShared();
+
   SourcecodeResolver *GetSourcecodeResolver() override { return this; }
   
 protected:
@@ -323,6 +326,8 @@ private:
     // Mutex must be unique_locked before calling
     // Returns the Size fo the Shm or 0 if not found
     uintptr_t ClearShmUnsafe(FEXCore::Context::Context *Ctx, uintptr_t Base);
+
+    void ReloadNamedRegionsUnsafe(FEXCore::Context::Context *Ctx);
   private:
     bool ListRemove(VMAEntry *Mapping);
     void ListReplace(VMAEntry *Mapping, VMAEntry *NewMapping);

@@ -164,15 +164,15 @@ void SyscallHandler::MarkGuestExecutableRange(uint64_t Start, uint64_t Length) {
 
 // Used for AOT
 FEXCore::HLE::NamedRegionLookupResult SyscallHandler::LookupNamedRegion(uint64_t GuestAddr) {
-  FHU::ScopedSignalMaskWithSharedLock lk(_SyscallHandler->VMATracking.Mutex);
+  FHU::ScopedSignalMaskWithSharedLock lk(VMATracking.Mutex);
   auto rv = FEXCore::HLE::NamedRegionLookupResult(nullptr, 0, std::move(lk));
 
   // Get the first mapping after GuestAddr, or end
   // GuestAddr is inclusive
   // If the write spans two pages, they will be flushed one at a time (generating two faults)
-  auto Entry = _SyscallHandler->VMATracking.LookupVMAUnsafe(GuestAddr);
+  auto Entry = VMATracking.LookupVMAUnsafe(GuestAddr);
 
-  if (Entry != _SyscallHandler->VMATracking.VMAs.end()) {
+  if (Entry != VMATracking.VMAs.end()) {
     rv.Entry = Entry->second.Resource ? Entry->second.Resource->NamedRegion : nullptr;
     rv.VAFileStart = Entry->second.Base - Entry->second.Offset;
     rv.VAMin = Entry->second.Base;
@@ -187,11 +187,11 @@ void SyscallHandler::TrackMmap(uintptr_t Base, uintptr_t Size, int Prot, int Fla
 	Size = FEXCore::AlignUp(Size, FHU::FEX_PAGE_SIZE);
 
   if (Flags & MAP_SHARED) {
-    MarkMemoryShared(CTX);
+    MarkMemoryShared();
   }
 
   {
-    FHU::ScopedSignalMaskWithUniqueLock lk(_SyscallHandler->VMATracking.Mutex);
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
 
     static uint64_t AnonSharedId = 1;
 
@@ -235,7 +235,7 @@ void SyscallHandler::TrackMunmap(uintptr_t Base, uintptr_t Size) {
 	Size = FEXCore::AlignUp(Size, FHU::FEX_PAGE_SIZE);
 
   {
-    FHU::ScopedSignalMaskWithUniqueLock lk(_SyscallHandler->VMATracking.Mutex);
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
 
     VMATracking.ClearUnsafe(CTX, Base, Size);
   }
@@ -249,7 +249,7 @@ void SyscallHandler::TrackMprotect(uintptr_t Base, uintptr_t Size, int Prot) {
 	Size = FEXCore::AlignUp(Size, FHU::FEX_PAGE_SIZE);
 
   {
-    FHU::ScopedSignalMaskWithUniqueLock lk(_SyscallHandler->VMATracking.Mutex);
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
 
     VMATracking.ChangeUnsafe(Base, Size, VMAProt::fromProt(Prot));
   }
@@ -265,7 +265,7 @@ void SyscallHandler::TrackMremap(uintptr_t OldAddress, size_t OldSize, size_t Ne
 
   {
 
-    FHU::ScopedSignalMaskWithUniqueLock lk(_SyscallHandler->VMATracking.Mutex);
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
 
     const auto OldVMA = VMATracking.LookupVMAUnsafe(OldAddress);
 
@@ -313,7 +313,7 @@ void SyscallHandler::TrackMremap(uintptr_t OldAddress, size_t OldSize, size_t Ne
 }
 
 void SyscallHandler::TrackShmat(int shmid, uintptr_t Base, int shmflg) {
-  MarkMemoryShared(CTX);
+  MarkMemoryShared();
 
   shmid_ds stat;
 
@@ -323,7 +323,7 @@ void SyscallHandler::TrackShmat(int shmid, uintptr_t Base, int shmflg) {
   uint64_t Length = stat.shm_segsz;
 
   {
-    FHU::ScopedSignalMaskWithUniqueLock lk(_SyscallHandler->VMATracking.Mutex);
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
 
     // TODO
     MRID mrid{SpecialDev::SHM, static_cast<uint64_t>(shmid)};
@@ -343,7 +343,7 @@ void SyscallHandler::TrackShmat(int shmid, uintptr_t Base, int shmflg) {
 }
 
 void SyscallHandler::TrackShmdt(uintptr_t Base) {
-  FHU::ScopedSignalMaskWithUniqueLock lk(_SyscallHandler->VMATracking.Mutex);
+  FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
 
   auto Length = VMATracking.ClearShmUnsafe(CTX, Base);
 
@@ -356,7 +356,7 @@ void SyscallHandler::TrackShmdt(uintptr_t Base) {
 void SyscallHandler::TrackMadvise(uintptr_t Base, uintptr_t Size, int advice) {
 	Size = FEXCore::AlignUp(Size, FHU::FEX_PAGE_SIZE);
 	{
-		FHU::ScopedSignalMaskWithUniqueLock lk(_SyscallHandler->VMATracking.Mutex);
+		FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
   	// TODO
 	}
 }
