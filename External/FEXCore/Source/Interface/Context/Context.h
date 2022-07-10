@@ -288,6 +288,7 @@ namespace FEXCore::Context {
     uint8_t GetGPRSize() const { return Config.Is64BitMode ? 8 : 4; }
 
     FEXCore::Core::NamedRegion *LoadNamedRegion(const std::string &filename);
+    FEXCore::Core::NamedRegion *ReloadNamedRegion(FEXCore::Core::NamedRegion *NamedRegion);
     void UnloadNamedRegion(FEXCore::Core::NamedRegion *Entry);
 
     FEXCore::JITSymbols Symbols;
@@ -302,9 +303,9 @@ namespace FEXCore::Context {
     FEXCore::Utils::PooledAllocatorMMap OpDispatcherAllocator;
     FEXCore::Utils::PooledAllocatorMMap FrontendAllocator;
 
-    void MarkMemoryShared();
+    bool MarkMemoryShared();
 
-    bool IsTSOEnabled() { return (IsMemoryShared || !Config.TSOAutoMigration) && Config.TSOEnabled; }
+    bool IsTSOEnabled() { return Config.TSOEnabled; }
 
   protected:
     void ClearCodeCache(FEXCore::Core::InternalThreadState *Thread);

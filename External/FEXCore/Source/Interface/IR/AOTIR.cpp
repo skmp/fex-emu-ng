@@ -10,6 +10,7 @@
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <Interface/Core/LookupCache.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -85,7 +86,15 @@ namespace FEXCore::IR {
     rv->IndexFD = IndexFD;
     rv->DataFD = DataFD;
 
+    struct stat IndexStat;
+    fstat(IndexFD, &IndexStat);
+
     rv->IndexFileSize = AlignUp(sizeof(*rv->Index), FHU::FEX_PAGE_SIZE);
+    
+    if (IndexStat.st_size > rv->IndexFileSize) {
+      rv->IndexFileSize = IndexStat.st_size;
+    }
+
     fallocate(IndexFD, 0, 0, rv->IndexFileSize);
     rv->Index = (decltype(rv->Index))FEXCore::Allocator::mmap(nullptr, rv->IndexFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, IndexFD, 0);
 

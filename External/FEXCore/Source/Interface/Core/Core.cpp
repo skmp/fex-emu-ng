@@ -164,6 +164,9 @@ namespace FEXCore::Context {
         Config.LibraryJITNaming()) {
       // Only initialize symbols file if enabled. Ensures we don't pollute /tmp with empty files.
       Symbols.InitFile();
+    if (Config.TSOAutoMigration) {
+      // Will be toggled on as needed
+      Config.TSOEnabled = false;      
     }
   }
 
@@ -1221,12 +1224,13 @@ namespace FEXCore::Context {
     CallAfter(Start, Length);
   }
 
-  void Context::MarkMemoryShared() {
+  bool Context::MarkMemoryShared() {
     if (!IsMemoryShared) {
       IsMemoryShared = true;
 
       if (Config.TSOAutoMigration) {
         LogMan::Msg::IFmt("Migrating to shared memory mode");
+        Config.TSOEnabled = true;
 
         std::lock_guard<std::mutex> lkThreads(ThreadCreationMutex);
         LogMan::Throw::AFmt(Threads.size() == 1, "First MarkMemoryShared called must be before creating any threads");
@@ -1239,12 +1243,16 @@ namespace FEXCore::Context {
 
         // DebugStore also needs to be cleared
         Thread->DebugStore.clear();
+
+        return true;
       }
     }
+
+    return false;
   }
 
-  void MarkMemoryShared(FEXCore::Context::Context *CTX) {
-    CTX->MarkMemoryShared();
+  bool MarkMemoryShared(FEXCore::Context::Context *CTX) {
+    return CTX->MarkMemoryShared();
   }
 
   void Context::RemoveThreadCodeEntry(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
@@ -1349,6 +1357,12 @@ namespace FEXCore::Context {
     fileid += Config.ABINoPF ? "p" : "P";
 
     return new Core::NamedRegion { .FileId = fileid, .Filename = filename };
+  }
+
+  Core::NamedRegion *Context::ReloadNamedRegion(Core::NamedRegion *NamedRegion) {
+    auto Filename = NamedRegion->Filename;
+    delete NamedRegion;
+    return LoadNamedRegion(Filename);
   }
 
   void Context::UnloadNamedRegion(Core::NamedRegion *Entry) {

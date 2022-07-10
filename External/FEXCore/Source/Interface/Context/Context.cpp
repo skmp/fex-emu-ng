@@ -181,6 +181,11 @@ namespace FEXCore::Context {
   Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string &Name) {
     return CTX->LoadNamedRegion(Name);
   }
+
+  Core::NamedRegion *ReloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *NamedRegion) {
+    return CTX->ReloadNamedRegion(NamedRegion);
+  }
+
   void UnloadNamedRegion(FEXCore::Context::Context *CTX, Core::NamedRegion *Entry) {
     return CTX->UnloadNamedRegion(Entry);
   }

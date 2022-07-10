@@ -364,4 +364,14 @@ uintptr_t SyscallHandler::VMATracking::ClearShmUnsafe(FEXCore::Context::Context 
 
   return ShmLength;
 }
+
+
+void SyscallHandler::VMATracking::ReloadNamedRegionsUnsafe(FEXCore::Context::Context *CTX) {
+  for(auto &Res: MappedResources) {
+    if (Res.second.NamedRegion) {
+      Res.second.NamedRegion = FEXCore::Context::ReloadNamedRegion(CTX, Res.second.NamedRegion);
+    }
+  }
+}
+
 }

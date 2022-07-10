@@ -273,13 +273,14 @@ namespace FEXCore::Context {
   FEX_DEFAULT_VISIBILITY FEXCore::CPUID::FunctionResults RunCPUIDFunctionName(FEXCore::Context::Context *CTX, uint32_t Function, uint32_t Leaf, uint32_t CPU);
 
   FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string& Name);
+  FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *ReloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *);
   FEX_DEFAULT_VISIBILITY void UnloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *Entry);
 
   FEX_DEFAULT_VISIBILITY void SetAOTIROpener(FEXCore::Context::Context *CTX, AOTIROpenerHandler CacheOpener);
 
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length);
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length, std::function<void(uint64_t start, uint64_t Length)> callback);
-  FEX_DEFAULT_VISIBILITY void MarkMemoryShared(FEXCore::Context::Context *CTX);
+  FEX_DEFAULT_VISIBILITY bool MarkMemoryShared(FEXCore::Context::Context *CTX);
 
   FEX_DEFAULT_VISIBILITY void ConfigureAOTGen(FEXCore::Core::InternalThreadState *Thread, std::set<uint64_t> *ExternalBranches, uint64_t SectionMaxAddress);
   FEX_DEFAULT_VISIBILITY CustomIRResult AddCustomIREntrypoint(FEXCore::Context::Context *CTX, uintptr_t Entrypoint, std::function<void(uintptr_t Entrypoint, FEXCore::IR::IREmitter *)> Handler, void *Creator = nullptr, void *Data = nullptr);

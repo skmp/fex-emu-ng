@@ -451,7 +451,7 @@ uint64_t CloneHandler(FEXCore::Core::CpuStateFrame *Frame, FEX::HLE::clone3_args
   };
 
   if (flags & CLONE_VM) {
-    MarkMemoryShared(Frame->Thread->CTX);
+    _SyscallHandler->MarkMemoryShared();
   }
 
   // If there are flags that can't be handled regularly then we need to hand off to the true clone handler
@@ -715,6 +715,13 @@ void SyscallHandler::UnlockAfterFork() {
   // VMATracking.Mutex.unlock();
   
   FM.GetFDLock()->unlock(); 
+}
+
+void SyscallHandler::MarkMemoryShared() {
+  if (FEXCore::Context::MarkMemoryShared(CTX)) {
+    FHU::ScopedSignalMaskWithUniqueLock lk(VMATracking.Mutex);
+    VMATracking.ReloadNamedRegionsUnsafe(CTX);
+  }
 }
 
 static bool isHEX(char c) {
