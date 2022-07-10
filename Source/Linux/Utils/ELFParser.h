@@ -26,6 +26,7 @@ struct ELFParser {
   std::string BuildID;
 
   int fd {-1};
+  bool OwnFd { false };
 
   static bool pread_all(int fd, void *buf, size_t nbytes, __off_t offset) { 
     return pread(fd, buf, nbytes, offset) == nbytes;
@@ -294,12 +295,12 @@ struct ELFParser {
   
   bool ReadElf(const std::string &file) {
     int NewFD = ::open(file.c_str(), O_RDONLY);
-
+    OwnFd = true;
     return ReadElf(NewFD);
   }
 
   void Closefd() {
-    if (fd != -1) {
+    if (OwnFd && fd != -1) {
       close(fd);
       fd = -1;
     }
