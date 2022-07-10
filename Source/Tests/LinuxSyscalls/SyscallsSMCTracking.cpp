@@ -186,9 +186,9 @@ FEXCore::HLE::NamedRegionLookupResult SyscallHandler::LookupNamedRegion(uint64_t
 }
 
 
-static std::string GetElfFingerprint(int fd) {
+static std::string GetElfFingerprint(const std::string& File) {
   ELFParser Elf;
-  if (Elf.ReadElf(fd) && Elf.BuildID.size()) {
+  if (Elf.ReadElf(File) && Elf.BuildID.size()) {
     return std::move(Elf.BuildID);
   } else {
     return "generic";
@@ -219,8 +219,8 @@ void SyscallHandler::TrackMmap(uintptr_t Base, uintptr_t Size, int Prot, int Fla
       Resource = &Iter->second;
 
       if (Inserted) {
-        auto fingerprint = GetElfFingerprint(fd);
         auto filename = FEX::get_fdpath(fd);
+        auto fingerprint = GetElfFingerprint(filename);
 
         Resource->NamedRegion = FEXCore::Context::LoadNamedRegion(CTX, filename, fingerprint);
         Resource->Iterator = Iter;
