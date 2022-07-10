@@ -294,7 +294,7 @@ struct ELFParser {
   }
   
   bool ReadElf(const std::string &file) {
-    int NewFD = ::open(file.c_str(), O_RDONLY);
+    int NewFD = ::open(file.c_str(), O_RDONLY | O_NONBLOCK);
     OwnFd = true;
     return ReadElf(NewFD);
   }
