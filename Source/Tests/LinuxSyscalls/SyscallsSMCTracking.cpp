@@ -190,13 +190,12 @@ static std::string GetElfFingerprint(int fd) {
   static constexpr auto toHEX = "0123456789abcdef";
   std::string fingerprint = "generic";
 
-  auto fd2 = dup(fd); // to avoid modifying seek etc
   ELFParser Elf;
-  if (Elf.ReadElf(fd2)) {
+  if (Elf.ReadElf(fd)) {
     for(const auto &Header: Elf.phdrs) {
       if (Header.p_type == PT_NOTE && Header.p_filesz < 1024) {
         uint8_t temp[Header.p_filesz];
-        pread(fd2, temp, Header.p_filesz, Header.p_offset);
+        pread(fd, temp, Header.p_filesz, Header.p_offset);
 
         auto Available = Header.p_filesz;
         auto Current = temp;
@@ -235,9 +234,6 @@ static std::string GetElfFingerprint(int fd) {
   }
 
   Exit:
-  if (fd2 != -1) {
-    close(fd2);
-  }
 
   return fingerprint;
 }
