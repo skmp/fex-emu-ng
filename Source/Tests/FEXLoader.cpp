@@ -418,8 +418,7 @@ int main(int argc, char **argv, char **const envp) {
   }
 
   if (AOTIRLoad() || AOTIRCapture() || AOTIRGenerate()) {
-    LogMan::Msg::IFmt("Warning: AOTIR is experimental, and might lead to crashes. "
-                      "Capture doesn't work with programs that fork.");
+    LogMan::Msg::IFmt("Warning: AOTIR is experimental, and might lead to crashes. ");
   }
 
   auto JitCacheFolder = std::filesystem::path(FEXCore::Config::GetDataDirectory()) / "JitCache";
