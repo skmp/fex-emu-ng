@@ -272,7 +272,7 @@ namespace FEXCore::Context {
   FEX_DEFAULT_VISIBILITY FEXCore::CPUID::FunctionResults RunCPUIDFunction(FEXCore::Context::Context *CTX, uint32_t Function, uint32_t Leaf);
   FEX_DEFAULT_VISIBILITY FEXCore::CPUID::FunctionResults RunCPUIDFunctionName(FEXCore::Context::Context *CTX, uint32_t Function, uint32_t Leaf, uint32_t CPU);
 
-  FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string& Name);
+  FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string& Name, const std::string& Fingerprint);
   FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *ReloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *);
   FEX_DEFAULT_VISIBILITY void UnloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *Entry);
 

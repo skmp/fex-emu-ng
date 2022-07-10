@@ -8,17 +8,20 @@ $end_info$
 
 #include "Common/FDUtils.h"
 
+#include <elf.h>
 #include <filesystem>
 #include <sys/shm.h>
 #include <sys/mman.h>
 
 #include "FEXCore/Core/Context.h"
+#include "Linux/Utils/ELFParser.h"
 #include "Tests/LinuxSyscalls/Syscalls.h"
 
 #include <FEXHeaderUtils/TypeDefines.h>
 #include <FEXCore/Debug/InternalThreadState.h>
 #include <FEXCore/Utils/LogManager.h>
 #include <FEXCore/Utils/MathUtils.h>
+#include <unistd.h>
 
 namespace FEX::HLE {
 
@@ -182,6 +185,63 @@ FEXCore::HLE::NamedRegionLookupResult SyscallHandler::LookupNamedRegion(uint64_t
   return rv;
 }
 
+
+static std::string GetElfFingerprint(int fd) {
+  static constexpr auto toHEX = "0123456789abcdef";
+  std::string fingerprint = "generic";
+
+  auto fd2 = dup(fd); // to avoid modifying seek etc
+  ELFParser Elf;
+  if (Elf.ReadElf(fd2)) {
+    for(const auto &Header: Elf.phdrs) {
+      if (Header.p_type == PT_NOTE && Header.p_filesz < 1024) {
+        uint8_t temp[Header.p_filesz];
+        pread(fd2, temp, Header.p_filesz, Header.p_offset);
+
+        auto Available = Header.p_filesz;
+        auto Current = temp;
+        while (Available > (12 + 4)) {
+          auto note_hdr = (uint32_t *)Current;
+          Available -= 12;
+          Current += 12;
+          if (note_hdr[2] == NT_GNU_BUILD_ID && note_hdr[0] == 4 && memcmp(&note_hdr[3], "GNU", 4) == 0) {
+            Available -= 4;
+            Current += 4;
+
+            if (note_hdr[1] <= Available) {
+              fingerprint.resize(note_hdr[1] * 2);
+              for (uint32_t i = 0; i < note_hdr[1]; i++) {
+                auto val = *Current++;
+                fingerprint[i * 2 + 0] = toHEX[val >> 4];
+                fingerprint[i * 2 + 1] = toHEX[val & 15];
+              }
+              goto Exit;
+            } else {
+              break;
+            }
+          } else {
+            auto SkipCount = FEXCore::AlignUp(note_hdr[0], 4) + FEXCore::AlignUp(note_hdr[1], 4);
+
+            if (SkipCount <= Available) {
+              Available -= SkipCount;
+              Current += SkipCount;
+            } else {
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Exit:
+  if (fd2 != -1) {
+    close(fd2);
+  }
+
+  return fingerprint;
+}
+
 // MMan Tracking
 void SyscallHandler::TrackMmap(uintptr_t Base, uintptr_t Size, int Prot, int Flags, int fd, off_t Offset) {
 	Size = FEXCore::AlignUp(Size, FHU::FEX_PAGE_SIZE);
@@ -206,9 +266,10 @@ void SyscallHandler::TrackMmap(uintptr_t Base, uintptr_t Size, int Prot, int Fla
       Resource = &Iter->second;
 
       if (Inserted) {
+        auto fingerprint = GetElfFingerprint(fd);
         auto filename = FEX::get_fdpath(fd);
 
-        Resource->NamedRegion = FEXCore::Context::LoadNamedRegion(CTX, filename);
+        Resource->NamedRegion = FEXCore::Context::LoadNamedRegion(CTX, filename, fingerprint);
         Resource->Iterator = Iter;
       }
 
@@ -328,7 +389,7 @@ void SyscallHandler::TrackShmat(int shmid, uintptr_t Base, int shmflg) {
     // TODO
     MRID mrid{SpecialDev::SHM, static_cast<uint64_t>(shmid)};
 
-    auto ResourceInserted = VMATracking.MappedResources.insert({mrid, {nullptr, nullptr, Length}});
+    auto ResourceInserted = VMATracking.MappedResources.emplace(mrid, MappedResource {nullptr, nullptr, Length});
     auto Resource = &ResourceInserted.first->second;
     if (ResourceInserted.second) {
       Resource->Iterator = ResourceInserted.first;

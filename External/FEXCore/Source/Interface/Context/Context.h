@@ -287,7 +287,7 @@ namespace FEXCore::Context {
 
     uint8_t GetGPRSize() const { return Config.Is64BitMode ? 8 : 4; }
 
-    FEXCore::Core::NamedRegion *LoadNamedRegion(const std::string &filename);
+    FEXCore::Core::NamedRegion *LoadNamedRegion(const std::string &filename, const std::string& Fingerprint);
     FEXCore::Core::NamedRegion *ReloadNamedRegion(FEXCore::Core::NamedRegion *NamedRegion);
     void UnloadNamedRegion(FEXCore::Core::NamedRegion *Entry);
 

@@ -1338,7 +1338,7 @@ namespace FEXCore::Context {
     return Result;
   }
 
-  Core::NamedRegion *Context::LoadNamedRegion(const std::string &filename) {
+  Core::NamedRegion *Context::LoadNamedRegion(const std::string &filename, const std::string& Fingerprint) {
 
     if (DebugServer) {
       DebugServer->AlertLibrariesChanged();
@@ -1348,7 +1348,7 @@ namespace FEXCore::Context {
 
     auto filename_hash = XXH3_64bits(filename.c_str(), filename.size());
 
-    auto fileid = base_filename + "-" + std::to_string(filename_hash) + "-";
+    auto fileid = base_filename + "-" + std::to_string(filename_hash) + "-" + Fingerprint + "-";
 
     // append optimization flags to the fileid
     fileid += (Config.SMCChecks == FEXCore::Config::CONFIG_SMC_FULL) ? "S" : "s";
@@ -1356,13 +1356,14 @@ namespace FEXCore::Context {
     fileid += Config.ABILocalFlags ? "L" : "l";
     fileid += Config.ABINoPF ? "p" : "P";
 
-    return new Core::NamedRegion { .FileId = fileid, .Filename = filename };
+    return new Core::NamedRegion { .FileId = fileid, .Filename = filename, .Fingerprint = Fingerprint };
   }
 
   Core::NamedRegion *Context::ReloadNamedRegion(Core::NamedRegion *NamedRegion) {
     auto Filename = NamedRegion->Filename;
+    auto Fingerprint = NamedRegion->Fingerprint;
     delete NamedRegion;
-    return LoadNamedRegion(Filename);
+    return LoadNamedRegion(Filename, Fingerprint);
   }
 
   void Context::UnloadNamedRegion(Core::NamedRegion *Entry) {

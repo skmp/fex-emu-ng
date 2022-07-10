@@ -178,8 +178,8 @@ namespace FEXCore::Context {
     CTX->SetAOTIROpener(CacheReader);
   }
 
-  Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string &Name) {
-    return CTX->LoadNamedRegion(Name);
+  Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string &Name, const std::string& Fingerprint) {
+    return CTX->LoadNamedRegion(Name, Fingerprint);
   }
 
   Core::NamedRegion *ReloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *NamedRegion) {
