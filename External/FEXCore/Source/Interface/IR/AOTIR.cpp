@@ -87,11 +87,11 @@ namespace FEXCore::IR {
 
     rv->IndexFileSize = AlignUp(sizeof(*rv->Index), FHU::FEX_PAGE_SIZE);
     fallocate(IndexFD, 0, 0, rv->IndexFileSize);
-    rv->Index = (decltype(rv->Index))mmap(nullptr, rv->IndexFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, IndexFD, 0);
+    rv->Index = (decltype(rv->Index))FEXCore::Allocator::mmap(nullptr, rv->IndexFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, IndexFD, 0);
 
     auto DataMapSize = AlignUp(sizeof(*rv->Data), FHU::FEX_PAGE_SIZE);
     fallocate(DataFD, 0, 0, DataMapSize);
-    rv->Data = (decltype(rv->Data))mmap(nullptr, DataMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, 0);
+    rv->Data = (decltype(rv->Data))FEXCore::Allocator::mmap(nullptr, DataMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, 0);
 
     LockFD(IndexFD);
 
@@ -115,7 +115,7 @@ namespace FEXCore::IR {
     auto NChunks = rv->Data->ChunksUsed.load();
 
     for (decltype(NChunks) i = 0; i < NChunks; i++) {
-      rv->MappedDataChunks[i] = (uint8_t*) mmap(nullptr, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, rv->DataFD, rv->Data->ChunkOffsets[i]);
+      rv->MappedDataChunks[i] = (uint8_t*) FEXCore::Allocator::mmap(nullptr, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, rv->DataFD, rv->Data->ChunkOffsets[i]);
     }
 
     return rv;
@@ -148,7 +148,9 @@ namespace FEXCore::IR {
       std::lock_guard lk {Mutex};
       auto OldSize = IndexFileSize.load();
       IndexFileSize = Index->FileSize.load();
-      Index = (decltype(Index))mremap(Index, OldSize, IndexFileSize, MREMAP_MAYMOVE);
+      //Index = (decltype(Index))mremap(Index, OldSize, IndexFileSize, MREMAP_MAYMOVE);
+      FEXCore::Allocator::munmap(Index, OldSize);
+      Index = (decltype(Index))FEXCore::Allocator::mmap(nullptr, IndexFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, IndexFD, 0);
       
       LogMan::Msg::DFmt("remapped Index: {}, IndexFileSize: {}", (void*)Index, IndexFileSize.load());
       LOGMAN_THROW_A_FMT(Index != MAP_FAILED, "mremap failed {} {} {}", (void*)Index, OldSize, IndexFileSize.load());
@@ -168,13 +170,15 @@ namespace FEXCore::IR {
           auto ChunkOffs = DataOffset % CHUNK_SIZE;
 
           if (!MappedDataChunks[ChunkNo]) {
-            auto v = (uint8_t *)mmap(0, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, Data->ChunkOffsets[ChunkNo]);
+            auto v = (uint8_t *)FEXCore::Allocator::mmap(0, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, Data->ChunkOffsets[ChunkNo]);
+            LOGMAN_THROW_A_FMT(v != MAP_FAILED, "mmap failed {} {} {}", (void*)v, CHUNK_SIZE, Data->ChunkOffsets[ChunkNum]);
+
             uint8_t *TestVal = nullptr;
             auto swapped = MappedDataChunks[ChunkNo].compare_exchange_strong(TestVal, v);
 
             if (!swapped) {
               // some other thread got to do this first
-              munmap(v, CHUNK_SIZE);
+              FEXCore::Allocator::munmap(v, CHUNK_SIZE);
             }
           }
 
@@ -252,7 +256,9 @@ namespace FEXCore::IR {
     if (Index->FileSize > IndexFileSize) {
       auto OldSize = IndexFileSize.load();
       IndexFileSize = Index->FileSize.load();
-      Index = (decltype(Index))mremap(Index, OldSize, IndexFileSize, MREMAP_MAYMOVE);
+      //Index = (decltype(Index))mremap(Index, OldSize, IndexFileSize, MREMAP_MAYMOVE);
+      FEXCore::Allocator::munmap(Index, OldSize);
+      Index = (decltype(Index))FEXCore::Allocator::mmap(nullptr, IndexFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, IndexFD, 0);
 
       LogMan::Msg::DFmt("remapped Index: {}, IndexFileSize: {}", (void*)Index, IndexFileSize.load());
       LOGMAN_THROW_A_FMT(Index != MAP_FAILED, "mremap failed {:x} {} {}", (void*)Index, OldSize, IndexFileSize.load());
@@ -296,7 +302,7 @@ namespace FEXCore::IR {
 
       fallocate(DataFD, 0, WriteOffset, CHUNK_SIZE);
 
-      MappedDataChunks[Data->ChunksUsed] = (uint8_t*)mmap(nullptr, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, WriteOffset);
+      MappedDataChunks[Data->ChunksUsed] = (uint8_t*)FEXCore::Allocator::mmap(nullptr, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, WriteOffset);
       
       LOGMAN_THROW_A_FMT(MappedDataChunks[Data->ChunksUsed] != MAP_FAILED, "mmap failed {} {:x}", DataFD, WriteOffset);
 
@@ -305,13 +311,15 @@ namespace FEXCore::IR {
       NewChunk = true;
     } else if (!MappedDataChunks[ChunkNum]) {
       // Make sure the required chunk is mapped
-      auto v = (uint8_t *)mmap(0, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, Data->ChunkOffsets[ChunkNum]);
+      auto v = (uint8_t *)FEXCore::Allocator::mmap(0, CHUNK_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, Data->ChunkOffsets[ChunkNum]);
+      LOGMAN_THROW_A_FMT(v != MAP_FAILED, "mmap failed {} {} {}", (void*)v, CHUNK_SIZE, Data->ChunkOffsets[ChunkNum]);
+
       uint8_t *TestVal = nullptr;
       auto swapped = MappedDataChunks[ChunkNum].compare_exchange_strong(TestVal, v);
 
       if (!swapped) {
         // some other thread got to do this first
-        munmap(v, CHUNK_SIZE);
+        FEXCore::Allocator::munmap(v, CHUNK_SIZE);
       }
     }
 
