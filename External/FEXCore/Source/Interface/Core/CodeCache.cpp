@@ -3,7 +3,7 @@
 #include "FEXHeaderUtils/TypeDefines.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/CodeCache.h"
-#include "Interface/IR/AOTIR.h"
+#include "Interface/IR/IRCache.h"
 
 #include <FEXCore/IR/IntrusiveIRList.h>
 #include <FEXCore/IR/RegisterAllocationData.h>
@@ -202,7 +202,7 @@ namespace FEXCore {
     }
 
     if (hash != CacheEntry->GuestHash) {
-      LogMan::Msg::IFmt("AOTIR: hash check failed {:x}\n", GuestRIP);
+      LogMan::Msg::IFmt("CodeCache: hash check failed {:x}\n", GuestRIP);
       return nullptr;
     }
 

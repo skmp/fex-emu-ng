@@ -98,9 +98,9 @@ namespace FEXCore::Context {
       FEX_CONFIG_OPT(TSOAutoMigration, TSOAUTOMIGRATION);
       FEX_CONFIG_OPT(ABILocalFlags, ABILOCALFLAGS);
       FEX_CONFIG_OPT(ABINoPF, ABINOPF);
-      FEX_CONFIG_OPT(AOTIRCapture, AOTIRCAPTURE);
-      FEX_CONFIG_OPT(AOTIRGenerate, AOTIRGENERATE);
-      FEX_CONFIG_OPT(AOTIRLoad, AOTIRLOAD);
+      FEX_CONFIG_OPT(IRCacheCapture, IRCACHECAPTURE);
+      FEX_CONFIG_OPT(IRCacheAOTGenerate, IRCACHEAOTGENERATE);
+      FEX_CONFIG_OPT(IRCacheLoad, IRCACHELOAD);
       FEX_CONFIG_OPT(SMCChecks, SMCCHECKS);
       FEX_CONFIG_OPT(Core, CORE);
       FEX_CONFIG_OPT(MaxInstPerBlock, MAXINST);
@@ -296,8 +296,12 @@ namespace FEXCore::Context {
     // Public for threading
     void ExecutionThread(FEXCore::Core::InternalThreadState *Thread);
 
-    void SetAOTIROpener(AOTIROpenerHandler CacheReader) {
-      CacheOpener = CacheReader;
+    void SetIRCacheOpener(CacheOpenerHandler CacheOpener) {
+      IRCacheOpener = CacheOpener;
+    }
+
+    void SetCodeCacheOpener(CacheOpenerHandler CacheOpener) {
+      CodeCacheOpener = CacheOpener;
     }
 
     FEXCore::Utils::PooledAllocatorMMap OpDispatcherAllocator;
@@ -339,7 +343,8 @@ namespace FEXCore::Context {
     std::mutex ExitMutex;
     std::unique_ptr<GdbServer> DebugServer;
 
-    AOTIROpenerHandler CacheOpener;
+    CacheOpenerHandler IRCacheOpener;
+    CacheOpenerHandler CodeCacheOpener;
     
     //std::unique_ptr<FEXCore::CodeSerialize::CodeObjectSerializeService> CodeObjectCacheService;
 

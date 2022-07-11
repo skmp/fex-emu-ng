@@ -73,12 +73,12 @@ namespace FEXCore::Context {
 
   using ExitHandler = std::function<void(uint64_t ThreadId, FEXCore::Context::ExitReason)>;
 
-  struct AOTIRFDSet {
+  struct CacheFDSet {
     int IndexFD;
     int DataFD;
   };
 
-  using AOTIROpenerHandler = std::function<std::optional<AOTIRFDSet>(const std::string& fileid, const std::string& filename)>;
+  using CacheOpenerHandler = std::function<std::optional<CacheFDSet>(const std::string& fileid, const std::string& filename)>;
   /**
    * @brief This initializes internal FEXCore state that is shared between contexts and requires overhead to setup
    */
@@ -276,7 +276,8 @@ namespace FEXCore::Context {
   FEX_DEFAULT_VISIBILITY FEXCore::Core::NamedRegion *ReloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *);
   FEX_DEFAULT_VISIBILITY void UnloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *Entry);
 
-  FEX_DEFAULT_VISIBILITY void SetAOTIROpener(FEXCore::Context::Context *CTX, AOTIROpenerHandler CacheOpener);
+  FEX_DEFAULT_VISIBILITY void SetIRCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener);
+  FEX_DEFAULT_VISIBILITY void SetCodeCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener);
 
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length);
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length, std::function<void(uint64_t start, uint64_t Length)> callback);

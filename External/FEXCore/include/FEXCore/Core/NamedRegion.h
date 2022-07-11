@@ -18,7 +18,7 @@ struct NamedRegion {
     std::string Filename;
     std::string Fingerprint;
     
-    std::unique_ptr<FEXCore::CodeCache> AOTIRCache;
+    std::unique_ptr<FEXCore::CodeCache> IRCache;
     std::unique_ptr<FEXCore::HLE::SourcecodeMap> SourcecodeMap;
     
     bool ContainsCode;

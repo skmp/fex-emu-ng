@@ -25,7 +25,7 @@ $end_info$
 #include "Interface/IR/PassManager.h"
 
 #include <FEXCore/HLE/SourcecodeResolver.h>
-#include "Interface/IR/AOTIR.h"
+#include "Interface/IR/IRCache.h"
 #include "FEXCore/Core/NamedRegion.h"
 
 #include <FEXCore/Config/Config.h>
@@ -946,21 +946,21 @@ namespace FEXCore::Context {
           NamedRegion.Entry->SourcecodeMap = SourcecodeResolver->GenerateMap(NamedRegion.Entry->Filename, NamedRegion.Entry->FileId);
         }
 
-        std::optional<AOTIRFDSet> CacheFDs;
+        std::optional<CacheFDSet> IRCacheFDs;
 
         if (!NamedRegion.Entry->ContainsCode) {
           NamedRegion.Entry->ContainsCode = true;
-          CacheFDs = CacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
+          IRCacheFDs = IRCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
         }
 
         // AOT IR bookkeeping and cache
-        if (Config.AOTIRLoad() || Config.AOTIRCapture()) {
-          if (!NamedRegion.Entry->AOTIRCache && CacheFDs) {
-            NamedRegion.Entry->AOTIRCache = IR::LoadCacheFile(CacheFDs);
+        if (Config.IRCacheLoad() || Config.IRCacheCapture()) {
+          if (!NamedRegion.Entry->IRCache && IRCacheFDs) {
+            NamedRegion.Entry->IRCache = IR::LoadCacheFile(IRCacheFDs);
           }
           
-          if (Config.AOTIRLoad() && NamedRegion.Entry->AOTIRCache) {
-            auto CachedIR = NamedRegion.Entry->AOTIRCache->Find<IR::AOTIRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+          if (Config.IRCacheLoad() && NamedRegion.Entry->IRCache) {
+            auto CachedIR = NamedRegion.Entry->IRCache->Find<IR::IRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
             if (CachedIR) {
               std::set<uint64_t> CodePages;
@@ -989,9 +989,9 @@ namespace FEXCore::Context {
               GeneratedIR = false;
             }
           }
-        } else if (CacheFDs) {
-          close(CacheFDs->DataFD);
-          close(CacheFDs->IndexFD);
+        } else if (IRCacheFDs) {
+          close(IRCacheFDs->DataFD);
+          close(IRCacheFDs->IndexFD);
         }
       }
     }
@@ -1115,9 +1115,9 @@ namespace FEXCore::Context {
         }
       }
 
-      if (Config.AOTIRCapture() || Config.AOTIRGenerate()) {
+      if (Config.IRCacheCapture() || Config.IRCacheAOTGenerate()) {
         if (GeneratedIR && RAData && NamedRegion.Entry) {
-          NamedRegion.Entry->AOTIRCache->Insert<IR::AOTIRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
+          NamedRegion.Entry->IRCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
         }
       }
     }

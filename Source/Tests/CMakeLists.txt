@@ -64,7 +64,7 @@ else()
   )
 endif()
 
-install(PROGRAMS "${PROJECT_SOURCE_DIR}/Scripts/FEXUpdateAOTIRCache.sh" DESTINATION bin RENAME FEXUpdateAOTIRCache)
+install(PROGRAMS "${PROJECT_SOURCE_DIR}/Scripts/FEXUpdateIRCache.sh" DESTINATION bin RENAME FEXUpdateIRCache)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
   # Check for conflicting binfmt before installing

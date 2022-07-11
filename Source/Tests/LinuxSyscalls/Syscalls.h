@@ -205,7 +205,7 @@ public:
   ///// VMA (Virtual Memory Area) tracking /////
   static bool HandleSegfault(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext);
   void MarkGuestExecutableRange(uint64_t Start, uint64_t Length) override;
-  // NamedRegionLookupResult also includes a shared lock guard, so the pointed AOTIRCacheEntry return can be safely used
+  // NamedRegionLookupResult also includes a shared lock guard, so the pointed IRCacheEntry return can be safely used
   FEXCore::HLE::NamedRegionLookupResult LookupNamedRegion(uint64_t GuestAddr) final override;
 
   ///// FORK tracking /////

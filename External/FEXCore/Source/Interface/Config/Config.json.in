@@ -329,15 +329,7 @@
       }
     },
     "Misc": {
-      "AOTIRCapture": {
-        "Type": "bool",
-        "Default": "false",
-        "Desc": [
-          "Captures IR and generates an AOT IR cache.",
-          "Captures both the loaded executable and libraries it loads."
-        ]
-      },
-      "AOTIRGenerate": {
+      "IRCacheAOTGenerate": {
         "Type": "bool",
         "Default": "false",
         "Desc": [
@@ -345,7 +337,15 @@
           "Does not run the executable."
         ]
       },
-      "AOTIRLoad": {
+      "IRCacheCapture": {
+        "Type": "bool",
+        "Default": "false",
+        "Desc": [
+          "Captures IR and generates an AOT IR cache.",
+          "Captures both the loaded executable and libraries it loads."
+        ]
+      },
+      "IRCacheLoad": {
         "Type": "bool",
         "Default": "false",
         "Desc": [

@@ -1,6 +1,6 @@
 #include "Common/Paths.h"
 #include <FEXCore/HLE/SourcecodeResolver.h>
-#include "Interface/IR/AOTIR.h"
+#include "Interface/IR/IRCache.h"
 #include "FEXCore/Core/NamedRegion.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/Core.h"
@@ -174,8 +174,12 @@ namespace FEXCore::Context {
     return CTX->CPUID.RunFunctionName(Function, Leaf, CPU);
   }
 
-  void SetAOTIROpener(FEXCore::Context::Context *CTX, AOTIROpenerHandler CacheReader) {
-    CTX->SetAOTIROpener(CacheReader);
+  void SetIRCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener) {
+    CTX->SetIRCacheOpener(CacheOpener);
+  }
+
+  void SetCodeCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener) {
+    CTX->SetCodeCacheOpener(CacheOpener);
   }
 
   Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string &Name, const std::string& Fingerprint) {

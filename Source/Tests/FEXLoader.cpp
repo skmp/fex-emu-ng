@@ -240,9 +240,9 @@ int main(int argc, char **argv, char **const envp) {
   }
 
   FEX_CONFIG_OPT(SilentLog, SILENTLOG);
-  FEX_CONFIG_OPT(AOTIRCapture, AOTIRCAPTURE);
-  FEX_CONFIG_OPT(AOTIRGenerate, AOTIRGENERATE);
-  FEX_CONFIG_OPT(AOTIRLoad, AOTIRLOAD);
+  FEX_CONFIG_OPT(IRCacheCapture, IRCACHECAPTURE);
+  FEX_CONFIG_OPT(IRCacheAOTGenerate, IRCACHEAOTGENERATE);
+  FEX_CONFIG_OPT(IRCacheLoad, IRCACHELOAD);
   FEX_CONFIG_OPT(OutputLog, OUTPUTLOG);
   FEX_CONFIG_OPT(LDPath, ROOTFS);
   FEX_CONFIG_OPT(Environment, ENV);
@@ -417,13 +417,13 @@ int main(int argc, char **argv, char **const envp) {
     });
   }
 
-  if (AOTIRLoad() || AOTIRCapture() || AOTIRGenerate()) {
-    LogMan::Msg::IFmt("Warning: AOTIR is experimental, and might lead to crashes. ");
+  if (IRCacheLoad() || IRCacheCapture() || IRCacheAOTGenerate()) {
+    LogMan::Msg::IFmt("Warning: IR Cache is experimental, and might lead to crashes.");
   }
 
   auto JitCacheFolder = std::filesystem::path(FEXCore::Config::GetDataDirectory()) / "JitCache";
 
-  FEXCore::Context::SetAOTIROpener(CTX, [&JitCacheFolder](const std::string &fileid, const std::string &filename) -> std::optional<FEXCore::Context::AOTIRFDSet> {
+  FEXCore::Context::SetIRCacheOpener(CTX, [&JitCacheFolder](const std::string &fileid, const std::string &filename) -> std::optional<FEXCore::Context::CacheFDSet> {
     auto EntryFolder = JitCacheFolder / fileid;
 
     std::error_code ec;
@@ -460,14 +460,14 @@ int main(int argc, char **argv, char **const envp) {
 
       return std::nullopt;
     } else {
-      return FEXCore::Context::AOTIRFDSet {
+      return FEXCore::Context::CacheFDSet {
         .IndexFD = IndexFD, .DataFD = DataFD
       };
     }
   });
 
 
-  if (AOTIRGenerate()) {
+  if (IRCacheAOTGenerate()) {
     for(auto &Section: Loader.Sections) {
       FEX::AOT::AOTGenSection(CTX, Section);
     }

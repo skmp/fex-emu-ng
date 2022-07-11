@@ -15,7 +15,7 @@ namespace FEXCore::IR {
   constexpr static uint64_t IR_CACHE_INDEX_COOKIE = COOKIE_VERSION("FXAI", IR_CACHE_VERSION);
   constexpr static uint64_t IR_CACHE_DATA_COOKIE = COOKIE_VERSION("FXAD", IR_CACHE_VERSION);
 
-  struct AOTIRCacheEntry : CacheEntry {
+  struct IRCacheEntry : CacheEntry {
 
     auto GetRAData() const {
       return (const IR::RegisterAllocationData *)&GetRangeData()[GuestRangeCount];
@@ -39,17 +39,17 @@ namespace FEXCore::IR {
 
     static auto GetFiller(const IR::RegisterAllocationData *RAData, const IR::IRListView *IRList) {
       return [RAData, IRList](auto *Entry) {
-        auto AOTIREntry = (IR::AOTIRCacheEntry*)Entry;
-        RAData->Serialize((uint8_t*)AOTIREntry->GetRAData());
-        IRList->Serialize((uint8_t*)AOTIREntry->GetIRData());
+        auto IREntry = (IR::IRCacheEntry*)Entry;
+        RAData->Serialize((uint8_t*)IREntry->GetRAData());
+        IRList->Serialize((uint8_t*)IREntry->GetIRData());
       };
     }
   };
   
-  struct AOTIRCacheResult {
-    using CacheEntryType = AOTIRCacheEntry;
+  struct IRCacheResult {
+    using CacheEntryType = IRCacheEntry;
 
-    AOTIRCacheResult(const AOTIRCacheEntry *const Entry) {
+    IRCacheResult(const IRCacheEntry *const Entry) {
       Entry->toResult(this);
 
       RAData = Entry->GetRAData();

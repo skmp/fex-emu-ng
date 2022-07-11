@@ -467,25 +467,25 @@ namespace {
         ConfigChanged = true;
       }
 
-      ImGui::Text("Ahead Of Time JIT Options:");
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_AOTIRGENERATE);
+      ImGui::Text("IR Cache Options:");
+      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_IRCACHEAOTGENERATE);
       bool AOTGenerate = Value.has_value() && **Value == "1";
-      if (ImGui::Checkbox("Generate", &AOTGenerate)) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_AOTIRGENERATE, AOTGenerate ? "1" : "0");
+      if (ImGui::Checkbox("AOT Generate", &AOTGenerate)) {
+        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_IRCACHEAOTGENERATE, AOTGenerate ? "1" : "0");
         ConfigChanged = true;
       }
 
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_AOTIRCAPTURE);
+      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_IRCACHECAPTURE);
       bool AOTCapture = Value.has_value() && **Value == "1";
-      if (ImGui::Checkbox("Capture", &AOTCapture)) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_AOTIRCAPTURE, AOTCapture ? "1" : "0");
+      if (ImGui::Checkbox("IR Capture", &AOTCapture)) {
+        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_IRCACHECAPTURE, AOTCapture ? "1" : "0");
         ConfigChanged = true;
       }
 
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_AOTIRLOAD);
+      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_IRCACHELOAD);
       bool AOTLoad = Value.has_value() && **Value == "1";
-      if (ImGui::Checkbox("Load", &AOTLoad)) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_AOTIRLOAD, AOTLoad ? "1" : "0");
+      if (ImGui::Checkbox("IR Load", &AOTLoad)) {
+        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_IRCACHELOAD, AOTLoad ? "1" : "0");
         ConfigChanged = true;
       }
 
