@@ -7,8 +7,6 @@
 #include <memory>
 #include <optional>
 #include <shared_mutex>
-
-
 namespace FEXCore {
 
   constexpr auto COOKIE_VERSION = [](const char CookieText[4], uint32_t Version) {
@@ -36,9 +34,6 @@ namespace FEXCore {
     uint64_t GuestHash;
     uint64_t GuestRangeCount;
 
-    // Ranges { 16b }
-    // RAData
-    // IRData
     uint8_t InlineData[0];
 
     const std::pair<uint64_t, uint64_t> *GetRangeData() const {
@@ -73,9 +68,7 @@ namespace FEXCore {
   struct CacheIndex {
     uint64_t Tag;
     std::atomic<uint64_t> FileSize;
-
     std::atomic<uint32_t> Count;
-
     CacheIndexEntry Entries[0];
   };
 
@@ -85,12 +78,8 @@ namespace FEXCore {
 
     std::atomic<uint64_t> ChunksUsed;
     std::atomic<uint64_t> CurrentChunkFree;
-
     std::atomic<uint64_t> WritePointer;
   };
-
-
-  //FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData
 
   class CodeCache {
 
