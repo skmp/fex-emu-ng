@@ -50,9 +50,10 @@ public:
   [[nodiscard]] std::string GetName() override { return "JIT"; }
 
   [[nodiscard]] void *CompileCode(uint64_t Entry,
-                                  FEXCore::IR::IRListView const *IR,
-                                  FEXCore::Core::DebugData *DebugData,
-                                  FEXCore::IR::RegisterAllocationData *RAData, bool GDBEnabled) override;
+                                  const FEXCore::IR::IRListView *const IR,
+                                  FEXCore::Core::DebugData *const DebugData,
+                                  const FEXCore::IR::RegisterAllocationData *const RAData,
+                                  bool GDBEnabled) override;
 
   [[nodiscard]] void *MapRegion(void* HostPtr, uint64_t, uint64_t) override { return HostPtr; }
 
@@ -146,7 +147,7 @@ private:
   // This is purely a debugging aid for developers to see if they are in JIT code space when inspecting raw memory
   void EmitDetectionString();
   IR::RegisterAllocationPass *RAPass;
-  IR::RegisterAllocationData *RAData;
+  const IR::RegisterAllocationData *const RAData;
   FEXCore::Core::DebugData *DebugData;
 
   void ResetStack();

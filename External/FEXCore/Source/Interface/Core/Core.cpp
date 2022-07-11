@@ -923,9 +923,9 @@ namespace FEXCore::Context {
   }
 
   Context::CompileCodeResult Context::CompileCode(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP) {
-    FEXCore::IR::IRListView *IRList {};
+    const FEXCore::IR::IRListView *IRList {};
+    const FEXCore::IR::RegisterAllocationData *RAData {};
     FEXCore::Core::DebugData *DebugData {};
-    FEXCore::IR::RegisterAllocationData *RAData {};
     bool GeneratedIR {};
     uint64_t StartAddr {};
     uint64_t Length {};
@@ -956,18 +956,19 @@ namespace FEXCore::Context {
         // AOT IR bookkeeping and cache
         if (Config.AOTIRLoad() || Config.AOTIRCapture()) {
           if (!NamedRegion.Entry->AOTIRCache && CacheFDs) {
-            NamedRegion.Entry->AOTIRCache = IR::AOTIRCache::LoadFile(CacheFDs->IndexFD, CacheFDs->DataFD);
+            NamedRegion.Entry->AOTIRCache = IR::LoadCacheFile(CacheFDs);
           }
           
           if (Config.AOTIRLoad() && NamedRegion.Entry->AOTIRCache) {
-            auto CachedIR = NamedRegion.Entry->AOTIRCache->Find(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+            auto CachedIR = NamedRegion.Entry->AOTIRCache->Find<IR::AOTIRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
             if (CachedIR) {
               std::set<uint64_t> CodePages;
 
-              for (size_t i = 0; i < CachedIR->RangeCounts; i++) {
-                for (size_t p = 0; p < CachedIR->Ranges[i].second; p += 4096) {
-                  auto Page = (GuestRIP + CachedIR->Ranges[i].first + p) &
+              // FEX_TODO("MarkGuestExecutable /before/ hash for smc invalidation correctness")
+              for (size_t i = 0; i < CachedIR->RangeCount; i++) {
+                for (size_t p = 0; p < CachedIR->RangeData[i].second; p += 4096) {
+                  auto Page = (GuestRIP + CachedIR->RangeData[i].first + p) &
                               FHU::FEX_PAGE_MASK;
                   if (CodePages.insert(Page).second) {
                     if (Thread->LookupCache->AddBlockExecutableRange(
@@ -1054,7 +1055,7 @@ namespace FEXCore::Context {
     }
 
     void *CodePtr {};
-    FEXCore::IR::IRListView *IRList {};
+    const FEXCore::IR::IRListView *IRList {};
     FEXCore::Core::DebugData *DebugData {};
 
     bool GeneratedIR {};
@@ -1116,7 +1117,7 @@ namespace FEXCore::Context {
 
       if (Config.AOTIRCapture() || Config.AOTIRGenerate()) {
         if (GeneratedIR && RAData && NamedRegion.Entry) {
-          NamedRegion.Entry->AOTIRCache->Insert(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, IRList, RAData);
+          NamedRegion.Entry->AOTIRCache->Insert<IR::AOTIRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
         }
       }
     }

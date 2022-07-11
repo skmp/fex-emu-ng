@@ -78,6 +78,7 @@ set (SRCS
   Common/SoftFloat-3e/s_normSubnormalF32Sig.c
   Common/SoftFloat-3e/s_f32UIToCommonNaN.c
   Interface/Context/Context.cpp
+  Interface/Core/CodeCache.cpp
   Interface/Core/LookupCache.cpp
   Interface/Core/BlockSamplingData.cpp
   Interface/Core/Core.cpp
@@ -119,7 +120,6 @@ set (SRCS
   Interface/Core/X86Tables/XOPTables.cpp
   Interface/HLE/Thunks/Thunks.cpp
   Interface/GDBJIT/GDBJIT.cpp
-  Interface/IR/AOTIR.cpp
   Interface/IR/IRDumper.cpp
   Interface/IR/IRParser.cpp
   Interface/IR/IREmitter.cpp

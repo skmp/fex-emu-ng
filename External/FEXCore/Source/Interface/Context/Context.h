@@ -212,9 +212,9 @@ namespace FEXCore::Context {
 
     struct CompileCodeResult {
       void* CompiledCode;
-      FEXCore::IR::IRListView *IRData;
+      const FEXCore::IR::IRListView *IRData;
       FEXCore::Core::DebugData *DebugData;
-      FEXCore::IR::RegisterAllocationData *RAData;
+      const FEXCore::IR::RegisterAllocationData *RAData;
       bool GeneratedIR;
       uint64_t StartAddr;
       uint64_t Length;

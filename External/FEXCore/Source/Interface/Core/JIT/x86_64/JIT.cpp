@@ -569,7 +569,12 @@ std::tuple<X86JITCore::SetCC, X86JITCore::CMovCC, X86JITCore::JCC> X86JITCore::G
   return { &CodeGenerator::sete , &CodeGenerator::cmove , &CodeGenerator::je  };
 }
 
-void *X86JITCore::CompileCode(uint64_t Entry, [[maybe_unused]] FEXCore::IR::IRListView const *IR, [[maybe_unused]] FEXCore::Core::DebugData *DebugData, FEXCore::IR::RegisterAllocationData *RAData, bool GDBEnabled) {
+void *X86JITCore::CompileCode(uint64_t Entry,
+                              const FEXCore::IR::IRListView *const IR,
+                              FEXCore::Core::DebugData *const DebugData,
+                              const FEXCore::IR::RegisterAllocationData *const RAData,
+                              bool GDBEnabled) {
+
   JumpTargets.clear();
   uint32_t SSACount = IR->GetSSACount();
 

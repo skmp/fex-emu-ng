@@ -1,119 +1,69 @@
 #pragma once
 
+#include "Interface/Core/CodeCache.h"
+
+#include "FEXCore/IR/IntrusiveIRList.h"
 #include "FEXCore/IR/RegisterAllocationData.h"
-#include <FEXCore/Config/Config.h>
 
-#include <atomic>
-#include <cstdint>
-#include <functional>
-#include <fstream>
-#include <memory>
-#include <map>
-#include <unordered_map>
-#include <shared_mutex>
-#include <queue>
-#include <FEXCore/HLE/SourcecodeResolver.h>
-#include <utility>
-
-namespace FEXCore::Core {
-struct DebugData;
-}
 
 namespace FEXCore::IR {
+
   class RegisterAllocationData;
   class IRListView;
+  
+  constexpr static uint32_t IR_CACHE_VERSION = 0x0000'00006;
+  constexpr static uint64_t IR_CACHE_INDEX_COOKIE = COOKIE_VERSION("FXAI", IR_CACHE_VERSION);
+  constexpr static uint64_t IR_CACHE_DATA_COOKIE = COOKIE_VERSION("FXAD", IR_CACHE_VERSION);
 
-  constexpr auto COOKIE_VERSION = [](const char CookieText[4], uint32_t Version) {
-    uint64_t Cookie = Version;
-    Cookie <<= 32;
+  struct AOTIRCacheEntry : CacheEntry {
 
-    // Make the cookie text be the lower bits
-    Cookie |= CookieText[3];
-    Cookie <<= 8;
-    Cookie |= CookieText[2];
-    Cookie <<= 8;
-    Cookie |= CookieText[1];
-    Cookie <<= 8;
-    Cookie |= CookieText[0];
-    return Cookie;
+    auto GetRAData() const {
+      return (const IR::RegisterAllocationData *)&GetRangeData()[GuestRangeCount];
+    }
 
+    auto GetRAData() {
+      return (IR::RegisterAllocationData *)&GetRangeData()[GuestRangeCount];
+    }
+
+    auto GetIRData() const {
+      return (const IR::IRListView *)GetRAData()->After();
+    }
+
+    auto GetIRData() {
+      return (IR::IRListView *)GetRAData()->After();
+    }
+
+    static uint64_t GetInlineSize(const IR::RegisterAllocationData *RAData, const IR::IRListView *IRList) {
+      return RAData->Size() + IRList->GetInlineSize();
+    }
+
+    static auto GetFiller(const IR::RegisterAllocationData *RAData, const IR::IRListView *IRList) {
+      return [RAData, IRList](auto *Entry) {
+        auto AOTIREntry = (IR::AOTIRCacheEntry*)Entry;
+        RAData->Serialize((uint8_t*)AOTIREntry->GetRAData());
+        IRList->Serialize((uint8_t*)AOTIREntry->GetIRData());
+      };
+    }
+  };
+  
+  struct AOTIRCacheResult {
+    using CacheEntryType = AOTIRCacheEntry;
+
+    AOTIRCacheResult(const AOTIRCacheEntry *const Entry) {
+      Entry->toResult(this);
+
+      RAData = Entry->GetRAData();
+      IRList = Entry->GetIRData();
+    }
+    const std::pair<uint64_t, uint64_t> *RangeData;
+    uint64_t RangeCount;
+    const FEXCore::IR::IRListView *IRList;
+    const FEXCore::IR::RegisterAllocationData *RAData;
   };
 
-  constexpr static uint32_t AOTIR_VERSION = 0x0000'00005;
-  constexpr static uint64_t AOTIR_INDEX_COOKIE = COOKIE_VERSION("FEXI", AOTIR_VERSION);
-  constexpr static uint64_t AOTIR_DATA_COOKIE = COOKIE_VERSION("FEXD", AOTIR_VERSION);
+  template <typename FDPairType>
+  auto LoadCacheFile(FDPairType CacheFDs) {
+    return CodeCache::LoadFile(CacheFDs->IndexFD, CacheFDs->DataFD, IR_CACHE_INDEX_COOKIE, IR_CACHE_DATA_COOKIE);
+  }
 
-  constexpr static uint64_t CHUNK_SIZE = 16 * 1024 * 1024;
-  constexpr static uint64_t MAX_CHUNKS = 1024;
-
-  constexpr static uint64_t INDEX_CHUNK_SIZE = 64 * 1024;
-
-  struct AOTIRCacheEntry {
-    uint64_t GuestHash;
-    uint64_t GuestRangeCounts;
-
-    // Ranges { 16b } 
-    // RAData
-    // IRData
-    uint8_t InlineData[0];
-
-    std::pair<uint64_t, uint64_t> *GetRangeData();
-    IR::RegisterAllocationData *GetRAData();
-    IR::IRListView *GetIRData();
-  };
-
-  struct AOTIRCacheIndexEntry {
-    uint64_t GuestStart;
-    uint32_t Left, Right;
-    uint64_t DataOffset;
-  };
-
-  struct AOTIRCacheIndex {
-    uint64_t Tag;
-    std::atomic<uint64_t> FileSize;
-
-    std::atomic<uint64_t> Count;
-
-    AOTIRCacheIndexEntry Entries[0];
-  };
-
-  struct AOTIRCacheData {
-    uint64_t Tag;
-    uint64_t ChunkOffsets[MAX_CHUNKS];
-
-    std::atomic<uint64_t> ChunksUsed;
-    std::atomic<uint64_t> CurrentChunkFree;
-
-    std::atomic<uint64_t> WritePointer;
-  };
-
-  struct IRCacheResult {
-    FEXCore::IR::IRListView *IRList {};
-    FEXCore::IR::RegisterAllocationData *RAData {};
-    uint64_t RangeCounts {};
-    std::pair<uint64_t, uint64_t> *Ranges {};
-  };
-
-  class AOTIRCache {
-    public:
-      static std::unique_ptr<AOTIRCache> LoadFile(int IndexFD, int DataFD);
-      ~AOTIRCache();
-      std::optional<IRCacheResult> Find(uint64_t OffsetRIP, uint64_t GuestRIP);
-      void Insert(uint64_t OffsetRIP, uint64_t GuestRIP, const std::vector<std::pair<uint64_t, uint64_t>>& Ranges, FEXCore::IR::IRListView *IRList, FEXCore::IR::RegisterAllocationData *RAData);
-
-    private:
-      std::shared_mutex Mutex;
-
-      AOTIRCacheIndex *Index;
-      std::atomic<uint64_t> IndexFileSize;
-
-      int IndexFD;
-
-      AOTIRCacheData *Data;
-      int DataFD;
-
-      std::atomic<uint8_t *> MappedDataChunks[MAX_CHUNKS];
-      
-      AOTIRCache() {}
-  };
 }

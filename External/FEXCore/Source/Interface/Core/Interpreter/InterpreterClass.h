@@ -27,9 +27,10 @@ public:
   [[nodiscard]] std::string GetName() override { return "Interpreter"; }
 
   [[nodiscard]] void *CompileCode(uint64_t Entry,
-                                  FEXCore::IR::IRListView const *IR,
-                                  FEXCore::Core::DebugData *DebugData,
-                                  FEXCore::IR::RegisterAllocationData *RAData, bool GDBEnabled) override;
+                                  const FEXCore::IR::IRListView *const IR,
+                                  FEXCore::Core::DebugData *const DebugData,
+                                  const FEXCore::IR::RegisterAllocationData *const RAData,
+                                  bool GDBEnabled) override;
 
   [[nodiscard]] void *MapRegion(void* HostPtr, uint64_t, uint64_t) override { return HostPtr; }
 

@@ -1,6 +1,7 @@
 #pragma once
 #include "IR.h"
 #include <FEXCore/Utils/Allocator.h>
+#include <cstdint>
 #include <cstring>
 
 namespace FEXCore::IR {
@@ -44,6 +45,14 @@ class FEX_PACKED RegisterAllocationData {
       return Map[Node.Value];
     }
     uint32_t SpillSlots() const { return SpillSlotCount; }
+
+    const uint8_t *After() const {
+      return Size() + (const uint8_t*)this;
+    }
+
+    uint8_t *After() {
+      return Size() + (uint8_t*)this;
+    }
 
     static size_t Size(uint32_t NodeCount) {
       return sizeof(RegisterAllocationData) + NodeCount * sizeof(Map[0]);

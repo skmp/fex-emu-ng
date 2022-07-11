@@ -75,9 +75,9 @@ namespace FEXCore::Core {
     uint64_t GuestRIP;
     uint64_t StartAddr;
     uint64_t Length;
-    std::unique_ptr<FEXCore::IR::IRListView> IR;
-    std::unique_ptr<FEXCore::IR::RegisterAllocationData> RAData;
-    std::unique_ptr<FEXCore::Core::DebugData> DebugData;
+    std::unique_ptr<const FEXCore::IR::IRListView> IR;
+    std::unique_ptr<const FEXCore::IR::RegisterAllocationData> RAData;
+    std::unique_ptr<const FEXCore::Core::DebugData> DebugData;
   };
 
   struct InternalThreadState {

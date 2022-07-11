@@ -73,9 +73,10 @@ namespace CPU {
      * Is actually a function pointer of type `void (FEXCore::Core::ThreadState *Thread)
      */
     [[nodiscard]] virtual void *CompileCode(uint64_t Entry,
-                                            FEXCore::IR::IRListView const *IR,
-                                            FEXCore::Core::DebugData *DebugData,
-                                            FEXCore::IR::RegisterAllocationData *RAData, bool GDBEnabled) = 0;
+                                            const FEXCore::IR::IRListView *const IR,
+                                            FEXCore::Core::DebugData *const DebugData,
+                                            const FEXCore::IR::RegisterAllocationData *const RAData,
+                                            bool GDBEnabled) = 0;
 
     /**
      * @brief Relocates a block of code from the JIT code object cache
