@@ -445,8 +445,8 @@ int main(int argc, char **argv, char **const envp) {
     }
 
     // Create or open cache files
-    int IndexFD = open(EntryIRIndex.c_str(), O_CREAT | O_RDWR, 0644);
-    int DataFD = open(EntryIRData.c_str(), O_CREAT | O_RDWR, 0644);
+    int IndexFD = open(EntryIRIndex.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0644);
+    int DataFD = open(EntryIRData.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0644);
 
     if (IndexFD == -1 || DataFD == -1) {
 
