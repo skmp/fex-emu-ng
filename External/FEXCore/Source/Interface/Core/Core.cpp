@@ -963,7 +963,7 @@ namespace FEXCore::Context {
           }
           
           if (/*Config.ObjCacheLoad()*/ true && NamedRegion.Entry->ObjCache) {
-            auto CachedObj = NamedRegion.Entry->IRCache->Find<Obj::ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+            auto CachedObj = NamedRegion.Entry->ObjCache->Find<Obj::ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
             if (CachedObj) {
               std::set<uint64_t> CodePages;
@@ -1166,7 +1166,7 @@ namespace FEXCore::Context {
 
       if (true /*Config.ObjCacheCapture() || Config.ObjCacheAOTGenerate()*/) {
         if (GeneratedCode & CODE_OBJ && NamedRegion.Entry) {
-          //NamedRegion.Entry->ObjCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
+          NamedRegion.Entry->ObjCache->Insert<Obj::ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
         }
       }
 

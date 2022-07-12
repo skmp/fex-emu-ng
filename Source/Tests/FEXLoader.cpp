@@ -469,8 +469,8 @@ int main(int argc, char **argv, char **const envp) {
     };
   };
 
-  FEXCore::Context::SetIRCacheOpener(CTX, GetCacheReader(true));
   FEXCore::Context::SetObjCacheOpener(CTX, GetCacheReader(false));
+  FEXCore::Context::SetIRCacheOpener(CTX, GetCacheReader(true));
 
 
   if (IRCacheAOTGenerate()) {

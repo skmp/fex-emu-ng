@@ -79,9 +79,13 @@ namespace FEXCore {
     fallocate(IndexFD, 0, 0, rv->IndexFileSize);
     rv->Index = (decltype(rv->Index))FEXCore::Allocator::mmap(nullptr, rv->IndexFileSize, PROT_READ | PROT_WRITE, MAP_SHARED, IndexFD, 0);
 
+    LOGMAN_THROW_A_FMT(rv->Index != MAP_FAILED, "initial Index mmap failed {} {} {}", (void*)rv->Index, rv->IndexFileSize.load(), IndexFD);
+
     auto DataMapSize = AlignUp(sizeof(*rv->Data), FHU::FEX_PAGE_SIZE);
     fallocate(DataFD, 0, 0, DataMapSize);
     rv->Data = (decltype(rv->Data))FEXCore::Allocator::mmap(nullptr, DataMapSize, PROT_READ | PROT_WRITE, MAP_SHARED, DataFD, 0);
+
+    LOGMAN_THROW_A_FMT(rv->Data != MAP_FAILED, "initial Data mmap failed {} {} {}", (void*)rv->Index, DataMapSize, DataFD);
 
     LockFD(IndexFD);
 
