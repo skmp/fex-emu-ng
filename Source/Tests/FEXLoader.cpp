@@ -421,50 +421,56 @@ int main(int argc, char **argv, char **const envp) {
     LogMan::Msg::IFmt("Warning: IR Cache is experimental, and might lead to crashes.");
   }
 
-  auto JitCacheFolder = std::filesystem::path(FEXCore::Config::GetDataDirectory()) / "JitCache";
+  auto GetCacheReader = [](bool IsIR) {
 
-  FEXCore::Context::SetIRCacheOpener(CTX, [&JitCacheFolder](const std::string &fileid, const std::string &filename) -> std::optional<FEXCore::Context::CacheFDSet> {
-    auto EntryFolder = JitCacheFolder / fileid;
+    auto JitCacheFolder = std::filesystem::path(FEXCore::Config::GetDataDirectory()) / "JitCache";
 
-    std::error_code ec;
-    std::filesystem::create_directories(EntryFolder, ec);
+    return [JitCacheFolder=std::move(JitCacheFolder), IsIR](const std::string &fileid, const std::string &filename) -> std::optional<FEXCore::Context::CacheFDSet> {
+      auto EntryFolder = JitCacheFolder / fileid;
 
-    if (ec) {
-      return std::nullopt;
-    }
+      std::error_code ec;
+      std::filesystem::create_directories(EntryFolder, ec);
 
-    auto EntryPath = EntryFolder / "Path";
-    auto EntryIRIndex = EntryFolder / "IRIndex";
-    auto EntryIRData = EntryFolder / "IRData";
-    
-    // Generate Path entry
-    int PathFD = open(EntryPath.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0644);
-    if (PathFD != -1) {
-      write(PathFD, filename.c_str(), filename.size());
-      close(PathFD);
-    }
-
-    // Create or open cache files
-    int IndexFD = open(EntryIRIndex.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0644);
-    int DataFD = open(EntryIRData.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0644);
-
-    if (IndexFD == -1 || DataFD == -1) {
-
-      if (IndexFD != -1) {
-        close(IndexFD);
+      if (ec) {
+        return std::nullopt;
       }
 
-      if (DataFD != -1) {
-        close(DataFD);
+      auto EntryPath = EntryFolder / "Path";
+      auto EntryIRIndex = EntryFolder / (IsIR? "IRIndex" : "OBJIndex");
+      auto EntryIRData = EntryFolder / (IsIR? "IRData" : "OBJData");
+      
+      // Generate Path entry
+      int PathFD = open(EntryPath.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0644);
+      if (PathFD != -1) {
+        write(PathFD, filename.c_str(), filename.size());
+        close(PathFD);
       }
 
-      return std::nullopt;
-    } else {
-      return FEXCore::Context::CacheFDSet {
-        .IndexFD = IndexFD, .DataFD = DataFD
-      };
-    }
-  });
+      // Create or open cache files
+      int IndexFD = open(EntryIRIndex.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0644);
+      int DataFD = open(EntryIRData.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0644);
+
+      if (IndexFD == -1 || DataFD == -1) {
+
+        if (IndexFD != -1) {
+          close(IndexFD);
+        }
+
+        if (DataFD != -1) {
+          close(DataFD);
+        }
+
+        return std::nullopt;
+      } else {
+        return FEXCore::Context::CacheFDSet {
+          .IndexFD = IndexFD, .DataFD = DataFD
+        };
+      }
+    };
+  };
+
+  FEXCore::Context::SetIRCacheOpener(CTX, GetCacheReader(true));
+  FEXCore::Context::SetObjCacheOpener(CTX, GetCacheReader(false));
 
 
   if (IRCacheAOTGenerate()) {

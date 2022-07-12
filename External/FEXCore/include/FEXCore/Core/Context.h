@@ -277,7 +277,7 @@ namespace FEXCore::Context {
   FEX_DEFAULT_VISIBILITY void UnloadNamedRegion(FEXCore::Context::Context *CTX, FEXCore::Core::NamedRegion *Entry);
 
   FEX_DEFAULT_VISIBILITY void SetIRCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener);
-  FEX_DEFAULT_VISIBILITY void SetCodeCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener);
+  FEX_DEFAULT_VISIBILITY void SetObjCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener);
 
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length);
   FEX_DEFAULT_VISIBILITY void InvalidateGuestCodeRange(FEXCore::Context::Context *CTX, uint64_t Start, uint64_t Length, std::function<void(uint64_t start, uint64_t Length)> callback);

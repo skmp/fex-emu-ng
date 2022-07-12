@@ -60,7 +60,7 @@ void InterpreterCore::InitializeSignalHandlers(FEXCore::Context::Context *CTX) {
 
 void *InterpreterCore::CompileCode(uint64_t Entry,
                                   const FEXCore::IR::IRListView *const IR,
-                                  [[maybe_unused]] const FEXCore::Core::DebugData *const DebugData,
+                                  [[maybe_unused]] FEXCore::Core::DebugData *const DebugData,
                                   [[maybe_unused]] const FEXCore::IR::RegisterAllocationData *const RAData,
                                   bool GDBEnabled) {
 

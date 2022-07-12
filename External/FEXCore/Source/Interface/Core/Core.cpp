@@ -25,6 +25,7 @@ $end_info$
 #include "Interface/IR/PassManager.h"
 
 #include <FEXCore/HLE/SourcecodeResolver.h>
+#include "Interface/ObjCache.h"
 #include "Interface/IR/IRCache.h"
 #include "FEXCore/Core/NamedRegion.h"
 
@@ -926,7 +927,7 @@ namespace FEXCore::Context {
     const FEXCore::IR::IRListView *IRList {};
     const FEXCore::IR::RegisterAllocationData *RAData {};
     FEXCore::Core::DebugData *DebugData {};
-    bool GeneratedIR {};
+    unsigned GeneratedCode {};
     uint64_t StartAddr {};
     uint64_t Length {};
 
@@ -947,13 +948,61 @@ namespace FEXCore::Context {
         }
 
         std::optional<CacheFDSet> IRCacheFDs;
+        std::optional<CacheFDSet> ObjCacheFDs;
 
         if (!NamedRegion.Entry->ContainsCode) {
           NamedRegion.Entry->ContainsCode = true;
           IRCacheFDs = IRCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
+          ObjCacheFDs = ObjCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
         }
 
-        // AOT IR bookkeeping and cache
+        // Obj Cache
+        if (true /* Config.ObjCacheLoad() || ObjCacheCapture() */) {
+          if (!NamedRegion.Entry->ObjCache && ObjCacheFDs) {
+            NamedRegion.Entry->ObjCache = Obj::LoadCacheFile(ObjCacheFDs);
+          }
+          
+          if (/*Config.ObjCacheLoad()*/ true && NamedRegion.Entry->ObjCache) {
+            auto CachedObj = NamedRegion.Entry->IRCache->Find<Obj::ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+
+            if (CachedObj) {
+              std::set<uint64_t> CodePages;
+
+              // FEX_TODO("MarkGuestExecutable /before/ hash for smc invalidation correctness")
+              for (size_t i = 0; i < CachedObj->RangeCount; i++) {
+                for (size_t p = 0; p < CachedObj->RangeData[i].second; p += 4096) {
+                  auto Page = (GuestRIP + CachedObj->RangeData[i].first + p) &
+                              FHU::FEX_PAGE_MASK;
+                  if (CodePages.insert(Page).second) {
+                    if (Thread->LookupCache->AddBlockExecutableRange(
+                            GuestRIP, Page, FHU::FEX_PAGE_SIZE)) {
+                      Thread->CTX->SyscallHandler->MarkGuestExecutableRange(
+                          Page, FHU::FEX_PAGE_SIZE);
+                    }
+                  }
+                }
+              }
+
+              // fill in from CachedObj
+              return {
+                .CompiledCode = Thread->CPUBackend->RelocateJITObjectCode(GuestRIP, CachedObj->HostCode, CachedObj->RelocationData),
+                .IRData = nullptr,
+                .DebugData = DebugData,
+                .RAData = nullptr,
+                .GeneratedCode = CODE_NONE,
+                .StartAddr = StartAddr,
+                .Length = Length,
+                .Ranges = std::move(Ranges)
+              };
+            }
+          }
+        } else if (ObjCacheFDs) {
+          close(ObjCacheFDs->DataFD);
+          close(ObjCacheFDs->IndexFD);
+        }
+
+
+        // IR cache
         if (Config.IRCacheLoad() || Config.IRCacheCapture()) {
           if (!NamedRegion.Entry->IRCache && IRCacheFDs) {
             NamedRegion.Entry->IRCache = IR::LoadCacheFile(IRCacheFDs);
@@ -986,7 +1035,7 @@ namespace FEXCore::Context {
               DebugData = new Core::DebugData();
               StartAddr = 0;
               Length = 0;
-              GeneratedIR = false;
+              GeneratedCode = CODE_NONE;
             }
           }
         } else if (IRCacheFDs) {
@@ -1012,7 +1061,7 @@ namespace FEXCore::Context {
       Thread->Stats.BlocksCompiled.fetch_add(1);
 
       // These blocks aren't already in the cache
-      GeneratedIR = true;
+      GeneratedCode = CODE_IR;
     }
 
     if (IRList == nullptr) {
@@ -1024,7 +1073,7 @@ namespace FEXCore::Context {
       .IRData = IRList,
       .DebugData = DebugData,
       .RAData = RAData,
-      .GeneratedIR = GeneratedIR,
+      .GeneratedCode = GeneratedCode | CODE_OBJ,
       .StartAddr = StartAddr,
       .Length = Length,
       .Ranges = std::move(Ranges)
@@ -1058,14 +1107,14 @@ namespace FEXCore::Context {
     const FEXCore::IR::IRListView *IRList {};
     FEXCore::Core::DebugData *DebugData {};
 
-    bool GeneratedIR {};
+    unsigned GeneratedCode {};
     uint64_t StartAddr {}, Length {};
 
-    auto [Code, IR, Data, RAData, Generated, _StartAddr, _Length, Ranges] = CompileCode(Thread, GuestRIP);
+    auto [Code, IR, Data, RAData, _GeneratedCode, _StartAddr, _Length, Ranges] = CompileCode(Thread, GuestRIP);
     CodePtr = Code;
     IRList = IR;
     DebugData = Data;
-    GeneratedIR = Generated;
+    GeneratedCode = _GeneratedCode;
     StartAddr = _StartAddr;
     Length = _Length;
 
@@ -1115,8 +1164,14 @@ namespace FEXCore::Context {
         }
       }
 
+      if (true /*Config.ObjCacheCapture() || Config.ObjCacheAOTGenerate()*/) {
+        if (GeneratedCode & CODE_OBJ && NamedRegion.Entry) {
+          //NamedRegion.Entry->ObjCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
+        }
+      }
+
       if (Config.IRCacheCapture() || Config.IRCacheAOTGenerate()) {
-        if (GeneratedIR && RAData && NamedRegion.Entry) {
+        if (GeneratedCode & CODE_IR && RAData && NamedRegion.Entry) {
           NamedRegion.Entry->IRCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
         }
       }

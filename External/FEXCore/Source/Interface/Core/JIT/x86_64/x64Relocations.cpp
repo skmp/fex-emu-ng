@@ -7,6 +7,10 @@ $end_info$
 #include "Interface/Context/Context.h"
 #include "Interface/Core/JIT/x86_64/JITClass.h"
 #include "Interface/HLE/Thunks/Thunks.h"
+#include "Interface/Core/ObjectCache/Relocations.h"
+#include "Interface/ObjCache.h"
+
+#define AOTLOG(...)
 
 namespace FEXCore::CPU {
 uint64_t X86JITCore::GetNamedSymbolLiteral(FEXCore::CPU::RelocNamedSymbolLiteral::NamedSymbol Op) {
@@ -87,12 +91,51 @@ void X86JITCore::InsertGuestRIPMove(Xbyak::Reg Reg, uint64_t Constant) {
   Relocations.emplace_back(MoveABI);
 }
 
-bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, size_t NumRelocations, const char* EntryRelocations) {
-  size_t DataIndex{};
-  for (size_t j = 0; j < NumRelocations; ++j) {
-    const FEXCore::CPU::Relocation *Reloc = reinterpret_cast<const FEXCore::CPU::Relocation *>(&EntryRelocations[DataIndex]);
-    LOGMAN_THROW_AA_FMT((DataIndex % alignof(Relocation)) == 0, "Alignment of relocation wasn't adhered to");
+void *X86JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostCode *const HostCode, const Obj::FragmentRelocations *const Relocations) {
+  AOTLOG("Relocating RIP 0x{:x}", Entry);
 
+  if ((getSize() + HostCode->Bytes) > CurrentCodeBuffer->Size) {
+    ThreadState->CTX->ClearCodeCache(ThreadState);
+  }
+
+  auto CursorBegin = getSize();
+	auto HostEntry = getCurr<uint64_t>();
+  AOTLOG("RIP Entry: disas 0x{:x},+{}", HostEntry, HostCode->Bytes);
+
+  // Forward the cursor
+  setSize(CursorBegin + HostCode->Bytes);
+
+  memcpy(reinterpret_cast<void*>(HostEntry), HostCode->Code, HostCode->Bytes);
+
+  // Relocation apply messes with the cursor
+  // Save the cursor and restore at the end
+  auto NewCursor = getSize();
+  bool Result = ApplyRelocations(Entry, HostEntry, CursorBegin, Relocations);
+
+  if (!Result) {
+    // Reset cursor to the start
+    setSize(CursorBegin);
+    return nullptr;
+  }
+
+  // We've moved the cursor around with relocations. Move it back to where we were before relocations
+  setSize(NewCursor);
+
+  ready();
+
+  this->IR = nullptr;
+
+  //AOTLOG("\tRelocated JIT at [0x{:x}, 0x{:x}): RIP 0x{:x}", (uint64_t)HostEntry, CodeEnd, Entry);
+  return reinterpret_cast<void*>(HostEntry);
+}
+
+bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const Obj::FragmentRelocations *const Relocations) {
+  //size_t DataIndex{};
+  for (size_t j = 0; j < Relocations->Count; ++j) {
+    //const FEXCore::CPU::Relocation *Reloc = reinterpret_cast<const FEXCore::CPU::Relocation *>(&EntryRelocations[DataIndex]);
+    auto Reloc = Relocations->Relocations + j;
+    //LOGMAN_THROW_A_FMT((DataIndex % alignof(Relocation)) == 0, "Alignment of relocation wasn't adhered to");
+  
     switch (Reloc->Header.Type) {
       case FEXCore::CPU::RelocationTypes::RELOC_NAMED_SYMBOL_LITERAL: {
         uint64_t Pointer = GetNamedSymbolLiteral(Reloc->NamedSymbolLiteral.Symbol);
@@ -102,7 +145,7 @@ bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint6
         // Place the pointer
         dq(Pointer);
 
-        DataIndex += sizeof(Reloc->NamedSymbolLiteral);
+        //DataIndex += sizeof(Reloc->NamedSymbolLiteral);
         break;
       }
       case FEXCore::CPU::RelocationTypes::RELOC_NAMED_THUNK_MOVE: {
@@ -114,7 +157,7 @@ bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint6
         // Relocation occurs at the cursorEntry + offset relative to that cursor.
         setSize(CursorEntry + Reloc->NamedThunkMove.Offset);
         LoadConstantWithPadding(Xbyak::Reg64(Reloc->NamedThunkMove.RegisterIndex), Pointer);
-        DataIndex += sizeof(Reloc->NamedThunkMove);
+        //DataIndex += sizeof(Reloc->NamedThunkMove);
         break;
       }
       case FEXCore::CPU::RelocationTypes::RELOC_GUEST_RIP_MOVE:
@@ -128,7 +171,7 @@ bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint6
         // Relocation occurs at the cursorEntry + offset relative to that cursor.
         setSize(CursorEntry + Reloc->GuestRIPMove.Offset);
         LoadConstantWithPadding(Xbyak::Reg64(Reloc->GuestRIPMove.RegisterIndex), Pointer);
-        DataIndex += sizeof(Reloc->GuestRIPMove);
+        //DataIndex += sizeof(Reloc->GuestRIPMove);
         break;
     }
   }

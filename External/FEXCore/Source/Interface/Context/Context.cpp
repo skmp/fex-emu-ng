@@ -178,8 +178,8 @@ namespace FEXCore::Context {
     CTX->SetIRCacheOpener(CacheOpener);
   }
 
-  void SetCodeCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener) {
-    CTX->SetCodeCacheOpener(CacheOpener);
+  void SetObjCacheOpener(FEXCore::Context::Context *CTX, CacheOpenerHandler CacheOpener) {
+    CTX->SetObjCacheOpener(CacheOpener);
   }
 
   Core::NamedRegion *LoadNamedRegion(FEXCore::Context::Context *CTX, const std::string &Name, const std::string& Fingerprint) {

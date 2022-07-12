@@ -7,6 +7,8 @@ $end_info$
 #include "Interface/Context/Context.h"
 #include "Interface/Core/JIT/Arm64/JITClass.h"
 #include "Interface/HLE/Thunks/Thunks.h"
+#include "Interface/Core/ObjectCache/Relocations.h"
+#include "Interface/ObjCache.h"
 
 namespace FEXCore::CPU {
     
@@ -77,11 +79,55 @@ void Arm64JITCore::InsertGuestRIPMove(vixl::aarch64::Register Reg, uint64_t Cons
   Relocations.emplace_back(MoveABI);
 }
 
-bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, size_t NumRelocations, const char* EntryRelocations) {
-  size_t DataIndex{};
-  for (size_t j = 0; j < NumRelocations; ++j) {
-    const FEXCore::CPU::Relocation *Reloc = reinterpret_cast<const FEXCore::CPU::Relocation *>(&EntryRelocations[DataIndex]);
-    LOGMAN_THROW_AA_FMT((DataIndex % alignof(Relocation)) == 0, "Alignment of relocation wasn't adhered to");
+void *Arm64JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostCode *const HostCode, const Obj::FragmentRelocations *const Relocations) {
+//void *Arm64JITCore::RelocateJITCode(uint64_t Entry, const void *_SerializationData) {
+  //AOTLOG("Relocating RIP 0x{:x}", Entry);
+
+
+  if ((GetCursorOffset() + HostCode->Bytes) > CurrentCodeBuffer->Size) {
+    ThreadState->CTX->ClearCodeCache(ThreadState);
+  }
+
+  auto CursorBegin = GetCursorOffset();
+  auto HostEntry = GetCursorAddress<uint64_t>();
+
+  // Forward the cursor
+  GetBuffer()->CursorForward(HostCode->Bytes);
+
+  memcpy(reinterpret_cast<void*>(HostEntry), HostCode->Code, HostCode->Bytes);
+
+  // Relocation apply messes with the cursor
+  // Save the cursor and restore at the end
+  auto CurrentCursor = GetCursorOffset();
+  bool Result = ApplyRelocations(Entry, HostEntry, CursorBegin, Relocations);
+
+  if (!Result) {
+    // Reset cursor to the start
+    GetBuffer()->SetCursorOffset(CursorBegin);
+    return nullptr;
+  }
+
+  // We've moved the cursor around with relocations. Move it back to where we were before relocations
+  GetBuffer()->SetCursorOffset(CurrentCursor);
+
+  FinalizeCode();
+
+  auto CodeEnd = GetCursorAddress<uint64_t>();
+  CPU.EnsureIAndDCacheCoherency(reinterpret_cast<void*>(HostEntry), CodeEnd - reinterpret_cast<uint64_t>(HostEntry));
+
+  this->IR = nullptr;
+
+  //AOTLOG("\tRelocated JIT at [0x{:x}, 0x{:x}): RIP 0x{:x}", (uint64_t)HostEntry, CodeEnd, Entry);
+  return reinterpret_cast<void*>(HostEntry);
+}
+
+bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const Obj::FragmentRelocations *const Relocations) {
+  //size_t DataIndex{};
+  for (size_t j = 0; j < Relocations->Count; ++j) {
+    //const FEXCore::CPU::Relocation *Reloc = reinterpret_cast<const FEXCore::CPU::Relocation *>(&EntryRelocations[DataIndex]);
+    auto Reloc = Relocations->Relocations + j;
+
+    //LOGMAN_THROW_A_FMT((DataIndex % alignof(Relocation)) == 0, "Alignment of relocation wasn't adhered to");
 
     switch (Reloc->Header.Type) {
       case FEXCore::CPU::RelocationTypes::RELOC_NAMED_SYMBOL_LITERAL: {
@@ -93,7 +139,7 @@ bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uin
         Literal<uint64_t> Lit(Pointer);
         place(&Lit);
 
-        DataIndex += sizeof(Reloc->NamedSymbolLiteral);
+        //DataIndex += sizeof(Reloc->NamedSymbolLiteral);
         break;
       }
       case FEXCore::CPU::RelocationTypes::RELOC_NAMED_THUNK_MOVE: {
@@ -105,7 +151,7 @@ bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uin
         // Relocation occurs at the cursorEntry + offset relative to that cursor.
         GetBuffer()->SetCursorOffset(CursorEntry + Reloc->NamedThunkMove.Offset);
         LoadConstant(vixl::aarch64::XRegister(Reloc->NamedThunkMove.RegisterIndex), Pointer, true);
-        DataIndex += sizeof(Reloc->NamedThunkMove);
+        //DataIndex += sizeof(Reloc->NamedThunkMove);
         break;
       }
       case FEXCore::CPU::RelocationTypes::RELOC_GUEST_RIP_MOVE: {
@@ -119,7 +165,7 @@ bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uin
         // Relocation occurs at the cursorEntry + offset relative to that cursor.
         GetBuffer()->SetCursorOffset(CursorEntry + Reloc->GuestRIPMove.Offset);
         LoadConstant(vixl::aarch64::XRegister(Reloc->GuestRIPMove.RegisterIndex), Pointer, true);
-        DataIndex += sizeof(Reloc->GuestRIPMove);
+        //DataIndex += sizeof(Reloc->GuestRIPMove);
         break;
       }
     }

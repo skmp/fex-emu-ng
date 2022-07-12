@@ -210,12 +210,16 @@ namespace FEXCore::Context {
     };
     [[nodiscard]] GenerateIRResult GenerateIR(FEXCore::Core::InternalThreadState *Thread, uint64_t GuestRIP,uint64_t MinAddr, uint64_t MaxAddr, bool ExtendedDebugInfo);
 
+    static constexpr unsigned CODE_NONE = 0;
+    static constexpr unsigned CODE_IR = 1;
+    static constexpr unsigned CODE_OBJ = 2;
+
     struct CompileCodeResult {
       void* CompiledCode;
       const FEXCore::IR::IRListView *IRData;
       FEXCore::Core::DebugData *DebugData;
       const FEXCore::IR::RegisterAllocationData *RAData;
-      bool GeneratedIR;
+      unsigned GeneratedCode;
       uint64_t StartAddr;
       uint64_t Length;
       std::vector<std::pair<uint64_t, uint64_t>> Ranges;
@@ -300,8 +304,8 @@ namespace FEXCore::Context {
       IRCacheOpener = CacheOpener;
     }
 
-    void SetCodeCacheOpener(CacheOpenerHandler CacheOpener) {
-      CodeCacheOpener = CacheOpener;
+    void SetObjCacheOpener(CacheOpenerHandler CacheOpener) {
+      ObjCacheOpener = CacheOpener;
     }
 
     FEXCore::Utils::PooledAllocatorMMap OpDispatcherAllocator;
@@ -344,7 +348,7 @@ namespace FEXCore::Context {
     std::unique_ptr<GdbServer> DebugServer;
 
     CacheOpenerHandler IRCacheOpener;
-    CacheOpenerHandler CodeCacheOpener;
+    CacheOpenerHandler ObjCacheOpener;
     
     //std::unique_ptr<FEXCore::CodeSerialize::CodeObjectSerializeService> CodeObjectCacheService;
 
