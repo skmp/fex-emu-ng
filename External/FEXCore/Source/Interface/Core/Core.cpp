@@ -987,7 +987,7 @@ namespace FEXCore::Context {
               return {
                 .CompiledCode = Thread->CPUBackend->RelocateJITObjectCode(GuestRIP, CachedObj->HostCode, CachedObj->RelocationData),
                 .IRData = nullptr,
-                .DebugData = DebugData,
+                .DebugData = new Core::DebugData { .HostCodeSize = CachedObj->HostCode->Bytes, .Relocations { CachedObj->RelocationData->Relocations, CachedObj->RelocationData->Relocations + CachedObj->RelocationData->Count }},
                 .RAData = nullptr,
                 .GeneratedCode = CODE_NONE,
                 .StartAddr = StartAddr,

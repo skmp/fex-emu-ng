@@ -62,7 +62,7 @@ namespace FEXCore::CPU {
     uint64_t Offset{};
 
     // The unrelocated RIP that is being moved
-    uint64_t GuestRIP;
+    uint64_t GuestEntryOffset;
   };
 
   union Relocation {

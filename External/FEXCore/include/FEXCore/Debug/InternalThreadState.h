@@ -61,7 +61,7 @@ namespace FEXCore::Core {
     uint64_t HostCodeSize; ///< The size of the code generated in the host JIT
     std::vector<DebugDataSubblock> Subblocks;
     std::vector<DebugDataGuestOpcode> GuestOpcodes;
-    std::vector<FEXCore::CPU::Relocation> *Relocations;
+    std::vector<FEXCore::CPU::Relocation> Relocations;
   };
 
   enum class SignalEvent {

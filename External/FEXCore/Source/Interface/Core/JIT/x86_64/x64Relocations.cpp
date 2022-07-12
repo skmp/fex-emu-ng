@@ -78,7 +78,7 @@ void X86JITCore::InsertGuestRIPMove(Xbyak::Reg Reg, uint64_t Constant) {
   // Offset is the offset from the entrypoint of the block
   auto CurrentCursor = getSize();
   MoveABI.GuestRIPMove.Offset = CurrentCursor - CursorEntry;
-  MoveABI.GuestRIPMove.GuestRIP = Constant;
+  MoveABI.GuestRIPMove.GuestEntryOffset = Constant - Entry;
   MoveABI.GuestRIPMove.RegisterIndex = Reg.getIdx();
 
   if (CTX->Config.CacheObjectCodeCompilation()) {
@@ -100,7 +100,7 @@ void *X86JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostC
 
   auto CursorBegin = getSize();
 	auto HostEntry = getCurr<uint64_t>();
-  AOTLOG("RIP Entry: disas 0x{:x},+{}", HostEntry, HostCode->Bytes);
+  AOTLOG("RIP Entry: disas 0x{:x},+{}", HostCode->Code, HostCode->Bytes);
 
   // Forward the cursor
   setSize(CursorBegin + HostCode->Bytes);
@@ -161,12 +161,7 @@ bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint6
         break;
       }
       case FEXCore::CPU::RelocationTypes::RELOC_GUEST_RIP_MOVE:
-        // XXX: Reenable once the JIT Object Cache is upstream
-        // XXX: Should spin the relocation list, create a list of guest RIP moves, and ask for them all once, reduces lock contention.
-        uint64_t Pointer = ~0ULL; // EmitterCTX->JITObjectCache->FindRelocatedRIP(Reloc->GuestRIPMove.GuestRIP);
-        if (Pointer == ~0ULL) {
-          return false;
-        }
+        uint64_t Pointer = GuestEntry + Reloc->GuestRIPMove.GuestEntryOffset;
 
         // Relocation occurs at the cursorEntry + offset relative to that cursor.
         setSize(CursorEntry + Reloc->GuestRIPMove.Offset);

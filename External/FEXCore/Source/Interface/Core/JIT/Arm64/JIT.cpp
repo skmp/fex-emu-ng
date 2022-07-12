@@ -784,7 +784,7 @@ void *Arm64JITCore::CompileCode(uint64_t Entry,
 
   if (DebugData) {
     DebugData->HostCodeSize = CodeEnd - GuestEntry;
-    DebugData->Relocations = &Relocations;
+    DebugData->Relocations = std::move(Relocations);
   }
 
   this->IR = nullptr;

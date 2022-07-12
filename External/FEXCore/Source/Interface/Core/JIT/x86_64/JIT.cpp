@@ -736,7 +736,7 @@ void *X86JITCore::CompileCode(uint64_t Entry,
 
   if (DebugData) {
     DebugData->HostCodeSize = reinterpret_cast<uintptr_t>(GuestExit) - reinterpret_cast<uintptr_t>(GuestEntry);
-    DebugData->Relocations = &Relocations;
+    DebugData->Relocations = std::move(Relocations);
   }
 
   return GuestEntry;

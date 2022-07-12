@@ -72,7 +72,7 @@ void Arm64JITCore::InsertGuestRIPMove(vixl::aarch64::Register Reg, uint64_t Cons
   // Offset is the offset from the entrypoint of the block
   auto CurrentCursor = GetCursorAddress<uint8_t *>();
   MoveABI.GuestRIPMove.Offset = CurrentCursor - GuestEntry;
-  MoveABI.GuestRIPMove.GuestRIP = Constant;
+  MoveABI.GuestRIPMove.GuestEntryOffset = Constant - Entry;
   MoveABI.GuestRIPMove.RegisterIndex = Reg.GetCode();
 
   LoadConstant(Reg, Constant, EmitterCTX->Config.CacheObjectCodeCompilation());
@@ -144,9 +144,6 @@ bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uin
       }
       case FEXCore::CPU::RelocationTypes::RELOC_NAMED_THUNK_MOVE: {
         uint64_t Pointer = reinterpret_cast<uint64_t>(EmitterCTX->ThunkHandler->LookupThunk(Reloc->NamedThunkMove.Symbol));
-        if (Pointer == ~0ULL) {
-          return false;
-        }
 
         // Relocation occurs at the cursorEntry + offset relative to that cursor.
         GetBuffer()->SetCursorOffset(CursorEntry + Reloc->NamedThunkMove.Offset);
@@ -157,7 +154,7 @@ bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uin
       case FEXCore::CPU::RelocationTypes::RELOC_GUEST_RIP_MOVE: {
         // XXX: Reenable once the JIT Object Cache is upstream
         // XXX: Should spin the relocation list, create a list of guest RIP moves, and ask for them all once, reduces lock contention.
-        uint64_t Pointer = ~0ULL; // EmitterCTX->JITObjectCache->FindRelocatedRIP(Reloc->GuestRIPMove.GuestRIP);
+        uint64_t Pointer = GuestEntry + Reloc->GuestRIPMove.GuestEntryOffset;
         if (Pointer == ~0ULL) {
           return false;
         }
