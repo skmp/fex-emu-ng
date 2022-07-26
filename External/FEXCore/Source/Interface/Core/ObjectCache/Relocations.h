@@ -6,6 +6,7 @@ namespace FEXCore::CPU {
     // 8 byte literal in memory for symbol
     // Aligned to struct RelocNamedSymbolLiteral
     RELOC_NAMED_SYMBOL_LITERAL,
+    RELOC_GUEST_RIP_LITERAL,
 
     // Fixed size named thunk move
     // 4 instruction constant generation on AArch64
@@ -39,6 +40,16 @@ namespace FEXCore::CPU {
     uint64_t Offset{};
   };
 
+  struct RelocGuestRIPLiteral final {
+    RelocationTypeHeader Header{};
+
+    // Offset in to the code section to begin the relocation
+    uint64_t Offset{};
+
+    // The offset relative to the fragment entry point
+    uint64_t GuestEntryOffset;
+  };
+
   struct RelocNamedThunkMove final {
     RelocationTypeHeader Header{};
 
@@ -61,7 +72,7 @@ namespace FEXCore::CPU {
     // Offset in to the code section to begin the relocation
     uint64_t Offset{};
 
-    // The unrelocated RIP that is being moved
+    // The offset relative to the fragment entry point
     uint64_t GuestEntryOffset;
   };
 
@@ -69,6 +80,7 @@ namespace FEXCore::CPU {
     RelocationTypeHeader Header{};
 
     RelocNamedSymbolLiteral NamedSymbolLiteral;
+    RelocGuestRIPLiteral  GuestRIPLiteral;
     // This makes our union of relocations at least 48 bytes
     // It might be more efficient to not use a union
     RelocNamedThunkMove NamedThunkMove;

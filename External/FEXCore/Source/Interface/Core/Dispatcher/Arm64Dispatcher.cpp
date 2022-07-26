@@ -180,6 +180,8 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
 
   constexpr bool SignalSafeCompile = true;
   {
+    mov(lr, x0);
+    
     ExitFunctionLinkerAddress = GetCursorAddress<uint64_t>();
     if (config.StaticRegisterAllocation)
       SpillStaticRegs();

@@ -39,10 +39,10 @@ void Arm64JITCore::InsertNamedThunkRelocation(vixl::aarch64::Register Reg, const
   Relocations.emplace_back(MoveABI);
 }
 
-Arm64JITCore::NamedSymbolLiteralPair Arm64JITCore::InsertNamedSymbolLiteral(FEXCore::CPU::RelocNamedSymbolLiteral::NamedSymbol Op) {
+Arm64JITCore::RelocatedLiteralPair Arm64JITCore::InsertNamedSymbolLiteral(FEXCore::CPU::RelocNamedSymbolLiteral::NamedSymbol Op) {
   uint64_t Pointer = GetNamedSymbolLiteral(Op);
 
-  Arm64JITCore::NamedSymbolLiteralPair Lit {
+  Arm64JITCore::RelocatedLiteralPair Lit {
     .Lit = Literal(Pointer),
     .MoveABI = {
       .NamedSymbolLiteral = {
@@ -57,7 +57,7 @@ Arm64JITCore::NamedSymbolLiteralPair Arm64JITCore::InsertNamedSymbolLiteral(FEXC
   return Lit;
 }
 
-void Arm64JITCore::PlaceNamedSymbolLiteral(NamedSymbolLiteralPair &Lit) {
+void Arm64JITCore::PlaceRelocatedLiteral(RelocatedLiteralPair &Lit) {
   // Offset is the offset from the entrypoint of the block
   auto CurrentCursor = GetCursorAddress<uint8_t *>();
   Lit.MoveABI.NamedSymbolLiteral.Offset = CurrentCursor - GuestEntry;
@@ -66,16 +66,16 @@ void Arm64JITCore::PlaceNamedSymbolLiteral(NamedSymbolLiteralPair &Lit) {
   Relocations.emplace_back(Lit.MoveABI);
 }
 
-void Arm64JITCore::InsertGuestRIPMove(vixl::aarch64::Register Reg, uint64_t Constant) {
+void Arm64JITCore::InsertGuestRIPMove(vixl::aarch64::Register Reg, const uint64_t GuestRIP) {
   Relocation MoveABI{};
   MoveABI.GuestRIPMove.Header.Type = FEXCore::CPU::RelocationTypes::RELOC_GUEST_RIP_MOVE;
   // Offset is the offset from the entrypoint of the block
   auto CurrentCursor = GetCursorAddress<uint8_t *>();
   MoveABI.GuestRIPMove.Offset = CurrentCursor - GuestEntry;
-  MoveABI.GuestRIPMove.GuestEntryOffset = Constant - Entry;
+  MoveABI.GuestRIPMove.GuestEntryOffset = GuestRIP - Entry;
   MoveABI.GuestRIPMove.RegisterIndex = Reg.GetCode();
 
-  LoadConstant(Reg, Constant, EmitterCTX->Config.CacheObjectCodeCompilation());
+  LoadConstant(Reg, GuestRIP, EmitterCTX->Config.CacheObjectCodeCompilation());
   Relocations.emplace_back(MoveABI);
 }
 

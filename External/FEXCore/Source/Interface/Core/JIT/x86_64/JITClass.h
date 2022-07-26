@@ -78,13 +78,13 @@ private:
   /**
    * @name Relocations
    * @{ */
-    uint64_t GetNamedSymbolLiteral(FEXCore::CPU::RelocNamedSymbolLiteral::NamedSymbol Op);
+    uint64_t  GetNamedSymbolLiteral(FEXCore::CPU::RelocNamedSymbolLiteral::NamedSymbol Op);
     void LoadConstantWithPadding(Xbyak::Reg Reg, uint64_t Constant);
 
     /**
      * @brief A literal pair relocation object for named symbol literals
      */
-    struct NamedSymbolLiteralPair {
+    struct RelocatedLiteralPair {
       Label Offset;
       Relocation MoveABI{};
     };
@@ -103,18 +103,21 @@ private:
      * @param Reg - The GPR to move the guest RIP in to
      * @param Constant - The guest RIP that will be relocated
      */
-    void InsertGuestRIPMove(Xbyak::Reg Reg, uint64_t Constant);
+    void InsertGuestRIPMove(Xbyak::Reg Reg, const uint64_t GuestRIP);
+
+    /*  */
+    RelocatedLiteralPair InsertGuestRIPLiteral(const uint64_t GuestRIP);
 
     /**
      * @brief Inserts a named symbol as a literal in memory
      *
-     * Need to use `PlaceNamedSymbolLiteral` with the return value to place the literal in the desired location
+     * Need to use `PlaceRelocatedLiteral` with the return value to place the literal in the desired location
      *
      * @param Op The named symbol to place
      *
-     * @return A temporary `NamedSymbolLiteralPair`
+     * @return A temporary `RelocatedLiteralPair`
      */
-    NamedSymbolLiteralPair InsertNamedSymbolLiteral(FEXCore::CPU::RelocNamedSymbolLiteral::NamedSymbol Op);
+    RelocatedLiteralPair InsertNamedSymbolLiteral(FEXCore::CPU::RelocNamedSymbolLiteral::NamedSymbol Op);
 
     /**
      * @brief Place the named symbol literal relocation in memory
@@ -122,7 +125,7 @@ private:
      * @param Lit - Which literal to place
      */
 
-    void PlaceNamedSymbolLiteral(NamedSymbolLiteralPair &Lit);
+    void PlaceRelocatedLiteral(RelocatedLiteralPair &Lit);
 
     std::vector<FEXCore::CPU::Relocation> Relocations;
 

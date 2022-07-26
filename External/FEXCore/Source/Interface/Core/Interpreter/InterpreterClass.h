@@ -40,6 +40,10 @@ public:
   
   void ClearCache() override;
 
+  [[nodiscard]] void *RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostCode *const HostCode, const Obj::FragmentRelocations *const Relocations) override {
+    return nullptr;
+  }
+
 private:
   size_t BufferUsed;
   Dispatcher *Dispatch;
