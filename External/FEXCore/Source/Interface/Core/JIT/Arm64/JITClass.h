@@ -147,7 +147,7 @@ private:
   // This is purely a debugging aid for developers to see if they are in JIT code space when inspecting raw memory
   void EmitDetectionString();
   IR::RegisterAllocationPass *RAPass;
-  const IR::RegisterAllocationData *const RAData;
+  const IR::RegisterAllocationData *RAData;
   FEXCore::Core::DebugData *DebugData;
 
   void ResetStack();

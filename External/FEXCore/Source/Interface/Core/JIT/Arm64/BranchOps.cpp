@@ -73,7 +73,7 @@ DEF_OP(ExitFunction) {
     auto l_BranchGuest = InsertGuestRIPLiteral(NewRIP);
     
     ldr(x0, &l_BranchHost.Lit);
-    br(x0);
+    blr(x0);
 
     PlaceRelocatedLiteral(l_BranchHost);
     PlaceRelocatedLiteral(l_BranchGuest);

@@ -145,7 +145,7 @@ void *X86JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostC
 
   auto CursorBegin = getSize();
 	auto HostEntry = getCurr<uint64_t>();
-  AOTLOG("RIP Entry: disas 0x{:x},+{}", (uintptr_t)HostCode->Code, HostCode->Bytes);
+  AOTLOG("RIP Entry: disas 0x{:x},+{}", (uintptr_t)HostEntry, HostCode->Bytes);
 
   // Forward the cursor
   setSize(CursorBegin + HostCode->Bytes);
