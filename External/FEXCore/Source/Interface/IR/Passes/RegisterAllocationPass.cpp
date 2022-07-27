@@ -107,8 +107,8 @@ namespace {
     Graph->Set.ClassCount = ClassCount;
     Graph->Set.Classes.resize(ClassCount);
 
-    // Allocate default nodes
-    ResetRegisterGraph(Graph, DEFAULT_NODE_COUNT);
+    // Don't allocate default nodes, let them be allocated on first use
+    // ResetRegisterGraph(Graph, DEFAULT_NODE_COUNT);
     return Graph;
   }
 
