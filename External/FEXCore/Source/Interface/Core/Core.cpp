@@ -165,6 +165,8 @@ namespace FEXCore::Context {
         Config.LibraryJITNaming()) {
       // Only initialize symbols file if enabled. Ensures we don't pollute /tmp with empty files.
       Symbols.InitFile();
+    }
+
     if (Config.TSOAutoMigration) {
       // Will be toggled on as needed
       Config.TSOEnabled = false;      
