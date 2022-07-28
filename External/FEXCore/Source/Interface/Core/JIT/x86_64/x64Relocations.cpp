@@ -126,12 +126,11 @@ void X86JITCore::InsertGuestRIPMove(Xbyak::Reg Reg, const uint64_t GuestRip) {
   MoveABI.GuestRIPMove.GuestEntryOffset = GuestRip - Entry;
   MoveABI.GuestRIPMove.RegisterIndex = Reg.getIdx();
 
-  //if (CTX->Config.CacheObjectCodeCompilation()) {
+  if (CTX->Config.OBJCache()) {
     LoadConstantWithPadding(Reg, GuestRip);
-  //}
-  //else {
-//    mov(Reg, GuestRip);
-//  }
+  } else {
+    mov(Reg, GuestRip);
+  }
 
   Relocations.emplace_back(MoveABI);
 }

@@ -958,7 +958,7 @@ namespace FEXCore::Context {
           }
 
           // Load ObjCache
-          if ((true /* Config.ObjCacheLoad() || ObjCacheCapture() */) && !NamedRegion.Entry->ObjCache) {
+          if (Config.OBJCache() && !NamedRegion.Entry->ObjCache) {
             auto ObjCacheFDs = ObjCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
             if (ObjCacheFDs) {
               NamedRegion.Entry->ObjCache = Obj::LoadCacheFile(ObjCacheFDs);
@@ -967,7 +967,7 @@ namespace FEXCore::Context {
 
           // Load IRCache
 
-          if ((Config.IRCacheLoad() || Config.IRCacheCapture()) && !NamedRegion.Entry->IRCache) {
+          if (Config.IRCache() && !NamedRegion.Entry->IRCache) {
             auto IRCacheFDs = IRCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
             if (IRCacheFDs) {
               NamedRegion.Entry->IRCache = IR::LoadCacheFile(IRCacheFDs);
@@ -976,7 +976,7 @@ namespace FEXCore::Context {
         }
 
         // Obj Cache
-        if (/*Config.ObjCacheLoad()*/ true && NamedRegion.Entry->ObjCache) {
+        if (Config.OBJCache() & Config::CONFIG_CACHE_READ && NamedRegion.Entry->ObjCache) {
           auto CachedObj = NamedRegion.Entry->ObjCache->Find<Obj::ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
           if (CachedObj) {
@@ -1012,7 +1012,7 @@ namespace FEXCore::Context {
         }
 
         // IR cache
-        if (Config.IRCacheLoad() && NamedRegion.Entry->IRCache) {
+        if (Config.IRCache() & Config::CONFIG_CACHE_READ && NamedRegion.Entry->IRCache) {
           auto CachedIR = NamedRegion.Entry->IRCache->Find<IR::IRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
           if (CachedIR) {
@@ -1164,12 +1164,16 @@ namespace FEXCore::Context {
         }
       }
 
-      if (true /*Config.ObjCacheCapture()*/ && GeneratedCode & CODE_OBJ && NamedRegion.Entry && NamedRegion.Entry->ObjCache) {
-        NamedRegion.Entry->ObjCache->Insert<Obj::ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
+      if (Config.OBJCache() & Config::CONFIG_CACHE_WRITE && GeneratedCode & CODE_OBJ) {
+        if (NamedRegion.Entry && NamedRegion.Entry->ObjCache) {
+          NamedRegion.Entry->ObjCache->Insert<Obj::ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
+        }
       }
 
-      if (Config.IRCacheCapture() && GeneratedCode & CODE_IR && RAData && NamedRegion.Entry && NamedRegion.Entry->IRCache) {
-        NamedRegion.Entry->IRCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
+      if (Config.IRCache() & Config::CONFIG_CACHE_WRITE && GeneratedCode & CODE_IR && RAData) {
+        if (NamedRegion.Entry && NamedRegion.Entry->IRCache) {
+          NamedRegion.Entry->IRCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
+        }
       }
     }
 

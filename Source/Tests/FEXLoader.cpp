@@ -240,9 +240,9 @@ int main(int argc, char **argv, char **const envp) {
   }
 
   FEX_CONFIG_OPT(SilentLog, SILENTLOG);
-  FEX_CONFIG_OPT(IRCacheCapture, IRCACHECAPTURE);
-  FEX_CONFIG_OPT(IRCacheAOTGenerate, IRCACHEAOTGENERATE);
-  FEX_CONFIG_OPT(IRCacheLoad, IRCACHELOAD);
+  FEX_CONFIG_OPT(IRCache, IRCACHE);
+  FEX_CONFIG_OPT(OBJCache, OBJCACHE);
+  FEX_CONFIG_OPT(AOTGenerate, AOTGENERATE);
   FEX_CONFIG_OPT(OutputLog, OUTPUTLOG);
   FEX_CONFIG_OPT(LDPath, ROOTFS);
   FEX_CONFIG_OPT(Environment, ENV);
@@ -417,8 +417,8 @@ int main(int argc, char **argv, char **const envp) {
     });
   }
 
-  if (IRCacheLoad() || IRCacheCapture() || IRCacheAOTGenerate()) {
-    LogMan::Msg::IFmt("Warning: IR Cache is experimental, and might lead to crashes.");
+  if (IRCache() || OBJCache() || AOTGenerate()) {
+    LogMan::Msg::IFmt("Warning: OBJ/IR Caches are experimental, and might lead to crashes.");
   }
 
   auto GetCacheReader = [](bool IsIR) {
@@ -469,11 +469,16 @@ int main(int argc, char **argv, char **const envp) {
     };
   };
 
-  FEXCore::Context::SetObjCacheOpener(CTX, GetCacheReader(false));
-  FEXCore::Context::SetIRCacheOpener(CTX, GetCacheReader(true));
+  if (OBJCache()) {
+    FEXCore::Context::SetObjCacheOpener(CTX, GetCacheReader(false));
+  }
+
+  if (IRCache()) {
+    FEXCore::Context::SetIRCacheOpener(CTX, GetCacheReader(true));
+  }
 
 
-  if (IRCacheAOTGenerate()) {
+  if (AOTGenerate()) {
     for(auto &Section: Loader.Sections) {
       FEX::AOT::AOTGenSection(CTX, Section);
     }

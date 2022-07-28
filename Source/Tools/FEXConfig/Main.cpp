@@ -2,6 +2,7 @@
 #include "Common/FileFormatCheck.h"
 #include "FEXCore/Config/Config.h"
 #include "Tools/CommonGUI/IMGui.h"
+#include "imgui.h"
 
 #include <FEXCore/Utils/Event.h>
 
@@ -10,6 +11,7 @@
 #include <mutex>
 #include <filesystem>
 #include <fstream>
+#include <string>
 #include <sys/inotify.h>
 #include <thread>
 #include <unistd.h>
@@ -271,6 +273,74 @@ namespace {
         ConfigChanged = true;
       }
 
+      ImGui::Text("JIT Object Cache:");
+      {
+        auto Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_OBJCACHE);
+
+        int OBJCache = FEXCore::Config::CONFIG_CACHE_AUTO;
+        
+        if (Value.has_value()) {
+          OBJCache = std::stoi(**Value);
+
+          if (OBJCache < 0 || OBJCache > FEXCore::Config::CONFIG_CACHE_MAX) {
+            OBJCache = FEXCore::Config::CONFIG_CACHE_DISABLED;
+          }
+        }
+
+        bool CacheChanged = false;
+        ImGui::PushID("OBJCache");
+        CacheChanged |= ImGui::RadioButton("Auto (Off)", &OBJCache, FEXCore::Config::CONFIG_CACHE_AUTO); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Disabled", &OBJCache, FEXCore::Config::CONFIG_CACHE_DISABLED); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Read-only", &OBJCache, FEXCore::Config::CONFIG_CACHE_READ); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Write-only", &OBJCache, FEXCore::Config::CONFIG_CACHE_WRITE); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Read/Write", &OBJCache, FEXCore::Config::CONFIG_CACHE_READWRITE);
+        ImGui::PopID();
+        
+        if (CacheChanged) {
+          if (OBJCache == FEXCore::Config::CONFIG_CACHE_AUTO) {
+            LoadedConfig->Erase(FEXCore::Config::ConfigOption::CONFIG_OBJCACHE);  
+          } else {
+            LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_OBJCACHE, std::to_string(OBJCache));
+          }
+          ConfigChanged = true;
+        }
+      }
+
+      ImGui::Text("JIT IR Cache:");
+      {
+        auto Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_IRCACHE);
+
+        int IRCache = FEXCore::Config::CONFIG_CACHE_AUTO;
+        
+        if (Value.has_value()) {
+          IRCache = std::stoi(**Value);
+
+          if (IRCache < 0 || IRCache > FEXCore::Config::CONFIG_CACHE_MAX) {
+            IRCache = FEXCore::Config::CONFIG_CACHE_DISABLED;
+          }
+        }
+
+        bool CacheChanged = false;
+
+        ImGui::PushID("IRCache");
+        CacheChanged |= ImGui::RadioButton("Auto (Off)", &IRCache, FEXCore::Config::CONFIG_CACHE_AUTO); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Disabled", &IRCache, FEXCore::Config::CONFIG_CACHE_DISABLED); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Read-only", &IRCache, FEXCore::Config::CONFIG_CACHE_READ); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Write-only", &IRCache, FEXCore::Config::CONFIG_CACHE_WRITE); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Read/Write", &IRCache, FEXCore::Config::CONFIG_CACHE_READWRITE);
+        ImGui::PopID();
+
+        if (CacheChanged) {
+          if (IRCache == FEXCore::Config::CONFIG_CACHE_AUTO) {
+            LoadedConfig->Erase(FEXCore::Config::ConfigOption::CONFIG_IRCACHE);  
+          } else {
+            LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_IRCACHE, std::to_string(IRCache));
+          }
+          ConfigChanged = true;
+        }
+      }
+
+
       ImGui::EndTabItem();
     }
   }
@@ -467,51 +537,11 @@ namespace {
         ConfigChanged = true;
       }
 
-      ImGui::Text("IR Cache Options:");
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_IRCACHEAOTGENERATE);
+      ImGui::Text("AOT Options:");
+      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_AOTGENERATE);
       bool AOTGenerate = Value.has_value() && **Value == "1";
       if (ImGui::Checkbox("AOT Generate", &AOTGenerate)) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_IRCACHEAOTGENERATE, AOTGenerate ? "1" : "0");
-        ConfigChanged = true;
-      }
-
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_IRCACHECAPTURE);
-      bool AOTCapture = Value.has_value() && **Value == "1";
-      if (ImGui::Checkbox("IR Capture", &AOTCapture)) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_IRCACHECAPTURE, AOTCapture ? "1" : "0");
-        ConfigChanged = true;
-      }
-
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_IRCACHELOAD);
-      bool AOTLoad = Value.has_value() && **Value == "1";
-      if (ImGui::Checkbox("IR Load", &AOTLoad)) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_IRCACHELOAD, AOTLoad ? "1" : "0");
-        ConfigChanged = true;
-      }
-
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_CACHEOBJECTCODECOMPILATION);
-
-      ImGui::Text("Cache JIT object code:");
-      int CacheJITObjectCode = 0;
-
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_CACHEOBJECTCODECOMPILATION);
-      if (Value.has_value()) {
-        if (**Value == "0") {
-          CacheJITObjectCode = FEXCore::Config::ConfigObjectCodeHandler::CONFIG_NONE;
-        } else if (**Value == "1") {
-          CacheJITObjectCode = FEXCore::Config::ConfigObjectCodeHandler::CONFIG_READ;
-        } else if (**Value == "2") {
-          CacheJITObjectCode = FEXCore::Config::ConfigObjectCodeHandler::CONFIG_READWRITE;
-        }
-      }
-
-      bool CacheChanged = false;
-      CacheChanged |= ImGui::RadioButton("Off", &CacheJITObjectCode, FEXCore::Config::ConfigObjectCodeHandler::CONFIG_NONE); ImGui::SameLine();
-      CacheChanged |= ImGui::RadioButton("Read-only", &CacheJITObjectCode, FEXCore::Config::ConfigObjectCodeHandler::CONFIG_READ); ImGui::SameLine();
-      CacheChanged |= ImGui::RadioButton("Read/Write", &CacheJITObjectCode, FEXCore::Config::ConfigObjectCodeHandler::CONFIG_READWRITE);
-
-      if (CacheChanged) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_CACHEOBJECTCODECOMPILATION, std::to_string(CacheJITObjectCode));
+        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_AOTGENERATE, AOTGenerate ? "1" : "0");
         ConfigChanged = true;
       }
 
