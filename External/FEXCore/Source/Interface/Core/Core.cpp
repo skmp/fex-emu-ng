@@ -171,6 +171,8 @@ namespace FEXCore::Context {
       // Will be toggled on as needed
       Config.TSOEnabled = false;      
     }
+
+    IRCacheOpener = ObjCacheOpener = [](const std::string &, const std::string &) { return std::nullopt; };
   }
 
   Context::~Context() {
@@ -935,114 +937,110 @@ namespace FEXCore::Context {
 
     std::vector<std::pair<uint64_t, uint64_t>> Ranges;
 
-    // NamedRegion contains a lock, be mindful of its scope
     uint64_t MinAddr = GuestRIP;
     uint64_t MaxAddr = UINT64_MAX;
 
+    // NamedRegion contains a lock, be mindful of its scope
     {
       auto NamedRegion = SyscallHandler->LookupNamedRegion(GuestRIP);
 
       if (NamedRegion.Entry) {
         MinAddr = NamedRegion.VAMin;
         MaxAddr = NamedRegion.VAMax - 1;
-        if (Config.GDBSymbols() && SourcecodeResolver && !NamedRegion.Entry->SourcecodeMap) {
-          NamedRegion.Entry->SourcecodeMap = SourcecodeResolver->GenerateMap(NamedRegion.Entry->Filename, NamedRegion.Entry->FileId);
-        }
 
-        std::optional<CacheFDSet> IRCacheFDs;
-        std::optional<CacheFDSet> ObjCacheFDs;
-
+        // First time compiling code for this NamedRegion?
         if (!NamedRegion.Entry->ContainsCode) {
           NamedRegion.Entry->ContainsCode = true;
-          IRCacheFDs = IRCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
-          ObjCacheFDs = ObjCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
+
+          // Load / Generate SourcecodeMap
+          if (Config.GDBSymbols() && SourcecodeResolver && !NamedRegion.Entry->SourcecodeMap) {
+            NamedRegion.Entry->SourcecodeMap = SourcecodeResolver->GenerateMap(NamedRegion.Entry->Filename, NamedRegion.Entry->FileId);
+          }
+
+          // Load ObjCache
+          if ((true /* Config.ObjCacheLoad() || ObjCacheCapture() */) && !NamedRegion.Entry->ObjCache) {
+            auto ObjCacheFDs = ObjCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
+            if (ObjCacheFDs) {
+              NamedRegion.Entry->ObjCache = Obj::LoadCacheFile(ObjCacheFDs);
+            }
+          }
+
+          // Load IRCache
+
+          if ((Config.IRCacheLoad() || Config.IRCacheCapture()) && !NamedRegion.Entry->IRCache) {
+            auto IRCacheFDs = IRCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
+            if (IRCacheFDs) {
+              NamedRegion.Entry->IRCache = IR::LoadCacheFile(IRCacheFDs);
+            }
+          }
         }
 
         // Obj Cache
-        if (true /* Config.ObjCacheLoad() || ObjCacheCapture() */) {
-          if (!NamedRegion.Entry->ObjCache && ObjCacheFDs) {
-            NamedRegion.Entry->ObjCache = Obj::LoadCacheFile(ObjCacheFDs);
-          }
-          
-          if (/*Config.ObjCacheLoad()*/ true && NamedRegion.Entry->ObjCache) {
-            auto CachedObj = NamedRegion.Entry->ObjCache->Find<Obj::ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+        if (/*Config.ObjCacheLoad()*/ true && NamedRegion.Entry->ObjCache) {
+          auto CachedObj = NamedRegion.Entry->ObjCache->Find<Obj::ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
-            if (CachedObj) {
-              std::set<uint64_t> CodePages;
+          if (CachedObj) {
+            std::set<uint64_t> CodePages;
 
-              // FEX_TODO("MarkGuestExecutable /before/ hash for smc invalidation correctness")
-              for (size_t i = 0; i < CachedObj->RangeCount; i++) {
-                for (size_t p = 0; p < CachedObj->RangeData[i].second; p += 4096) {
-                  auto Page = (GuestRIP + CachedObj->RangeData[i].first + p) &
-                              FHU::FEX_PAGE_MASK;
-                  if (CodePages.insert(Page).second) {
-                    if (Thread->LookupCache->AddBlockExecutableRange(
-                            GuestRIP, Page, FHU::FEX_PAGE_SIZE)) {
-                      Thread->CTX->SyscallHandler->MarkGuestExecutableRange(
-                          Page, FHU::FEX_PAGE_SIZE);
-                    }
+            // FEX_TODO("MarkGuestExecutable /before/ hash for smc invalidation correctness")
+            for (size_t i = 0; i < CachedObj->RangeCount; i++) {
+              for (size_t p = 0; p < CachedObj->RangeData[i].second; p += 4096) {
+                auto Page = (GuestRIP + CachedObj->RangeData[i].first + p) &
+                            FHU::FEX_PAGE_MASK;
+                if (CodePages.insert(Page).second) {
+                  if (Thread->LookupCache->AddBlockExecutableRange(
+                          GuestRIP, Page, FHU::FEX_PAGE_SIZE)) {
+                    Thread->CTX->SyscallHandler->MarkGuestExecutableRange(
+                        Page, FHU::FEX_PAGE_SIZE);
                   }
                 }
               }
-
-              // fill in from CachedObj
-              return {
-                .CompiledCode = Thread->CPUBackend->RelocateJITObjectCode(GuestRIP, CachedObj->HostCode, CachedObj->RelocationData),
-                .IRData = nullptr,
-                .DebugData = new Core::DebugData { .HostCodeSize = CachedObj->HostCode->Bytes, .Relocations { CachedObj->RelocationData->Relocations, CachedObj->RelocationData->Relocations + CachedObj->RelocationData->Count }},
-                .RAData = nullptr,
-                .GeneratedCode = CODE_NONE,
-                .StartAddr = StartAddr,
-                .Length = Length,
-                .Ranges = std::move(Ranges)
-              };
             }
+
+            // fill in from CachedObj
+            return {
+              .CompiledCode = Thread->CPUBackend->RelocateJITObjectCode(GuestRIP, CachedObj->HostCode, CachedObj->RelocationData),
+              .IRData = nullptr,
+              .DebugData = new Core::DebugData { .HostCodeSize = CachedObj->HostCode->Bytes, .Relocations { CachedObj->RelocationData->Relocations, CachedObj->RelocationData->Relocations + CachedObj->RelocationData->Count }},
+              .RAData = nullptr,
+              .GeneratedCode = CODE_NONE,
+              .StartAddr = StartAddr,
+              .Length = Length,
+              .Ranges = std::move(Ranges)
+            };
           }
-        } else if (ObjCacheFDs) {
-          close(ObjCacheFDs->DataFD);
-          close(ObjCacheFDs->IndexFD);
         }
 
-
         // IR cache
-        if (Config.IRCacheLoad() || Config.IRCacheCapture()) {
-          if (!NamedRegion.Entry->IRCache && IRCacheFDs) {
-            NamedRegion.Entry->IRCache = IR::LoadCacheFile(IRCacheFDs);
-          }
-          
-          if (Config.IRCacheLoad() && NamedRegion.Entry->IRCache) {
-            auto CachedIR = NamedRegion.Entry->IRCache->Find<IR::IRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+        if (Config.IRCacheLoad() && NamedRegion.Entry->IRCache) {
+          auto CachedIR = NamedRegion.Entry->IRCache->Find<IR::IRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
-            if (CachedIR) {
-              std::set<uint64_t> CodePages;
+          if (CachedIR) {
+            std::set<uint64_t> CodePages;
 
-              // FEX_TODO("MarkGuestExecutable /before/ hash for smc invalidation correctness")
-              for (size_t i = 0; i < CachedIR->RangeCount; i++) {
-                for (size_t p = 0; p < CachedIR->RangeData[i].second; p += 4096) {
-                  auto Page = (GuestRIP + CachedIR->RangeData[i].first + p) &
-                              FHU::FEX_PAGE_MASK;
-                  if (CodePages.insert(Page).second) {
-                    if (Thread->LookupCache->AddBlockExecutableRange(
-                            GuestRIP, Page, FHU::FEX_PAGE_SIZE)) {
-                      Thread->CTX->SyscallHandler->MarkGuestExecutableRange(
-                          Page, FHU::FEX_PAGE_SIZE);
-                    }
+            // FEX_TODO("MarkGuestExecutable /before/ hash for smc invalidation correctness")
+            for (size_t i = 0; i < CachedIR->RangeCount; i++) {
+              for (size_t p = 0; p < CachedIR->RangeData[i].second; p += 4096) {
+                auto Page = (GuestRIP + CachedIR->RangeData[i].first + p) &
+                            FHU::FEX_PAGE_MASK;
+                if (CodePages.insert(Page).second) {
+                  if (Thread->LookupCache->AddBlockExecutableRange(
+                          GuestRIP, Page, FHU::FEX_PAGE_SIZE)) {
+                    Thread->CTX->SyscallHandler->MarkGuestExecutableRange(
+                        Page, FHU::FEX_PAGE_SIZE);
                   }
                 }
               }
-
-              // Setup pointers to internal structures
-              IRList = CachedIR->IRList;
-              RAData = CachedIR->RAData;
-              DebugData = new Core::DebugData();
-              StartAddr = 0;
-              Length = 0;
-              GeneratedCode = CODE_NONE;
             }
+
+            // Setup pointers to internal structures
+            IRList = CachedIR->IRList;
+            RAData = CachedIR->RAData;
+            DebugData = new Core::DebugData();
+            StartAddr = 0;
+            Length = 0;
+            GeneratedCode = CODE_NONE;
           }
-        } else if (IRCacheFDs) {
-          close(IRCacheFDs->DataFD);
-          close(IRCacheFDs->IndexFD);
         }
       }
     }
@@ -1166,16 +1164,12 @@ namespace FEXCore::Context {
         }
       }
 
-      if (true /*Config.ObjCacheCapture() || Config.ObjCacheAOTGenerate()*/) {
-        if (GeneratedCode & CODE_OBJ && NamedRegion.Entry) {
-          NamedRegion.Entry->ObjCache->Insert<Obj::ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
-        }
+      if (true /*Config.ObjCacheCapture()*/ && GeneratedCode & CODE_OBJ && NamedRegion.Entry && NamedRegion.Entry->ObjCache) {
+        NamedRegion.Entry->ObjCache->Insert<Obj::ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
       }
 
-      if (Config.IRCacheCapture() || Config.IRCacheAOTGenerate()) {
-        if (GeneratedCode & CODE_IR && RAData && NamedRegion.Entry) {
-          NamedRegion.Entry->IRCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
-        }
+      if (Config.IRCacheCapture() && GeneratedCode & CODE_IR && RAData && NamedRegion.Entry && NamedRegion.Entry->IRCache) {
+        NamedRegion.Entry->IRCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
       }
     }
 
