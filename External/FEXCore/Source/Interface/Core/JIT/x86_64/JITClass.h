@@ -9,7 +9,7 @@ $end_info$
 #include <FEXCore/IR/RegisterAllocationData.h>
 #include "Interface/Core/BlockSamplingData.h"
 #include "Interface/Core/Dispatcher/Dispatcher.h"
-#include "Interface/Core/ObjectCache/Relocations.h"
+#include "FEXCore/Core/CPURelocations.h"
 
 #define XBYAK64
 #include <xbyak/xbyak.h>
@@ -129,10 +129,10 @@ private:
 
     std::vector<FEXCore::CPU::Relocation> Relocations;
 
-    void *RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostCode *const HostCode, const Obj::FragmentRelocations *const Relocations) override;
+    void *RelocateJITObjectCode(uint64_t Entry, const ObjCacheFragment *const HostCode, const ObjCacheRelocations *const Relocations) override;
 
     ///< Relocation code loading
-    bool ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const Obj::FragmentRelocations *const Relocations);
+    bool ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const ObjCacheRelocations *const Relocations);
 
     /**
     * @brief Current guest RIP entrypoint

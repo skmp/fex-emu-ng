@@ -25,8 +25,8 @@ $end_info$
 #include "Interface/IR/PassManager.h"
 
 #include <FEXCore/HLE/SourcecodeResolver.h>
-#include "Interface/ObjCache.h"
-#include "Interface/IR/IRCache.h"
+#include "Interface/Core/CodeCache/ObjCache.h"
+#include "Interface/Core/CodeCache/IRCache.h"
 #include "FEXCore/Core/NamedRegion.h"
 
 #include <FEXCore/Config/Config.h>
@@ -961,7 +961,7 @@ namespace FEXCore::Context {
           if (Config.OBJCache() && !NamedRegion.Entry->ObjCache) {
             auto ObjCacheFDs = ObjCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
             if (ObjCacheFDs) {
-              NamedRegion.Entry->ObjCache = Obj::LoadCacheFile(ObjCacheFDs);
+              NamedRegion.Entry->ObjCache = LoadOBJCache(ObjCacheFDs);
             }
           }
 
@@ -970,14 +970,14 @@ namespace FEXCore::Context {
           if (Config.IRCache() && !NamedRegion.Entry->IRCache) {
             auto IRCacheFDs = IRCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
             if (IRCacheFDs) {
-              NamedRegion.Entry->IRCache = IR::LoadCacheFile(IRCacheFDs);
+              NamedRegion.Entry->IRCache = LoadIRCache(IRCacheFDs);
             }
           }
         }
 
         // Obj Cache
         if (Config.OBJCache() & Config::CONFIG_CACHE_READ && NamedRegion.Entry->ObjCache) {
-          auto CachedObj = NamedRegion.Entry->ObjCache->Find<Obj::ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+          auto CachedObj = NamedRegion.Entry->ObjCache->Find<ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
           if (CachedObj) {
             std::set<uint64_t> CodePages;
@@ -1013,7 +1013,7 @@ namespace FEXCore::Context {
 
         // IR cache
         if (Config.IRCache() & Config::CONFIG_CACHE_READ && NamedRegion.Entry->IRCache) {
-          auto CachedIR = NamedRegion.Entry->IRCache->Find<IR::IRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
+          auto CachedIR = NamedRegion.Entry->IRCache->Find<IRCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
           if (CachedIR) {
             std::set<uint64_t> CodePages;
@@ -1166,13 +1166,13 @@ namespace FEXCore::Context {
 
       if (Config.OBJCache() & Config::CONFIG_CACHE_WRITE && GeneratedCode & CODE_OBJ) {
         if (NamedRegion.Entry && NamedRegion.Entry->ObjCache) {
-          NamedRegion.Entry->ObjCache->Insert<Obj::ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
+          NamedRegion.Entry->ObjCache->Insert<ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
         }
       }
 
       if (Config.IRCache() & Config::CONFIG_CACHE_WRITE && GeneratedCode & CODE_IR && RAData) {
         if (NamedRegion.Entry && NamedRegion.Entry->IRCache) {
-          NamedRegion.Entry->IRCache->Insert<IR::IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
+          NamedRegion.Entry->IRCache->Insert<IRCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, RAData, IRList);
         }
       }
     }

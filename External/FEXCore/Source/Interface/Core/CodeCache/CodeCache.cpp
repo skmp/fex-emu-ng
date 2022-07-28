@@ -2,8 +2,8 @@
 #include "FEXCore/Utils/MathUtils.h"
 #include "FEXHeaderUtils/TypeDefines.h"
 #include "Interface/Context/Context.h"
-#include "Interface/Core/CodeCache.h"
-#include "Interface/IR/IRCache.h"
+#include "Interface/Core/CodeCache/CodeCache.h"
+#include "Interface/Core/CodeCache/IRCache.h"
 
 #include <FEXCore/IR/IntrusiveIRList.h>
 #include <FEXCore/IR/RegisterAllocationData.h>

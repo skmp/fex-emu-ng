@@ -1,12 +1,12 @@
 #pragma once
 
-#include "Interface/Core/CodeCache.h"
+#include "CodeCache.h"
 
 #include "FEXCore/IR/IntrusiveIRList.h"
 #include "FEXCore/IR/RegisterAllocationData.h"
 
 
-namespace FEXCore::IR {
+namespace FEXCore {
 
   class RegisterAllocationData;
   class IRListView;
@@ -39,7 +39,7 @@ namespace FEXCore::IR {
 
     static auto GetFiller(const IR::RegisterAllocationData *RAData, const IR::IRListView *IRList) {
       return [RAData, IRList](auto *Entry) {
-        auto IREntry = (IR::IRCacheEntry*)Entry;
+        auto IREntry = (IRCacheEntry*)Entry;
         RAData->Serialize((uint8_t*)IREntry->GetRAData());
         IRList->Serialize((uint8_t*)IREntry->GetIRData());
       };
@@ -62,7 +62,7 @@ namespace FEXCore::IR {
   };
 
   template <typename FDPairType>
-  auto LoadCacheFile(FDPairType CacheFDs) {
+  auto LoadIRCache(FDPairType CacheFDs) {
     return CodeCache::LoadFile(CacheFDs->IndexFD, CacheFDs->DataFD, IR_CACHE_INDEX_COOKIE, IR_CACHE_DATA_COOKIE);
   }
 

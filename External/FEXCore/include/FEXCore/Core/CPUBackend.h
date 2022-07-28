@@ -28,10 +28,9 @@ namespace Core {
   struct InternalThreadState;
 }
 
-namespace Obj {
-  struct FragmentHostCode;
-  struct FragmentRelocations;
-}
+struct ObjCacheFragment;
+struct ObjCacheRelocations;
+
 
 namespace CPU {
   struct CPUBackendFeatures {
@@ -87,7 +86,7 @@ namespace CPU {
      *
      * @return An executable function pointer relocated from the cache object
      */
-    [[nodiscard]] virtual void *RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostCode *const HostCode, const Obj::FragmentRelocations *const Relocations) = 0;
+    [[nodiscard]] virtual void *RelocateJITObjectCode(uint64_t Entry, const ObjCacheFragment *const HostCode, const ObjCacheRelocations *const Relocations) = 0;
 
     /**
      * @brief Function for mapping memory in to the CPUBackend's visible space. Allows setting up virtual mappings if required

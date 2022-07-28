@@ -1,6 +1,6 @@
 #include "GDBJIT.h"
 
-#include "Interface/IR/IRCache.h"
+#include "Interface/Core/CodeCache/IRCache.h"
 #include <FEXCore/Core/NamedRegion.h>
 #include <FEXCore/Debug/InternalThreadState.h>
 #include <FEXCore/HLE/SourcecodeResolver.h>

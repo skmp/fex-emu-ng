@@ -7,8 +7,8 @@ $end_info$
 #include "Interface/Context/Context.h"
 #include "Interface/Core/JIT/Arm64/JITClass.h"
 #include "Interface/HLE/Thunks/Thunks.h"
-#include "Interface/Core/ObjectCache/Relocations.h"
-#include "Interface/ObjCache.h"
+#include "FEXCore/Core/CPURelocations.h"
+#include "Interface/Core/CodeCache/ObjCache.h"
 
 #define AOTLOG(...)
 //#define AOTLOG LogMan::Msg::DFmt
@@ -110,7 +110,7 @@ void Arm64JITCore::InsertGuestRIPMove(vixl::aarch64::Register Reg, const uint64_
   Relocations.emplace_back(MoveABI);
 }
 
-void *Arm64JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostCode *const HostCode, const Obj::FragmentRelocations *const Relocations) {
+void *Arm64JITCore::RelocateJITObjectCode(uint64_t Entry, const ObjCacheFragment *const HostCode, const ObjCacheRelocations *const Relocations) {
   AOTLOG("Relocating RIP 0x{:x}", Entry);
 
 
@@ -153,7 +153,7 @@ void *Arm64JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHos
   return reinterpret_cast<void*>(HostEntry);
 }
 
-bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const Obj::FragmentRelocations *const Relocations) {
+bool Arm64JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const ObjCacheRelocations *const Relocations) {
   //size_t DataIndex{};
   for (size_t j = 0; j < Relocations->Count; ++j) {
     //const FEXCore::CPU::Relocation *Reloc = reinterpret_cast<const FEXCore::CPU::Relocation *>(&EntryRelocations[DataIndex]);

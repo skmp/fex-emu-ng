@@ -1,6 +1,6 @@
 #include "Common/Paths.h"
 #include <FEXCore/HLE/SourcecodeResolver.h>
-#include "Interface/IR/IRCache.h"
+#include "Interface/Core/CodeCache/IRCache.h"
 #include "FEXCore/Core/NamedRegion.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/Core.h"

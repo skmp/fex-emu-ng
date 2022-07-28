@@ -8,8 +8,8 @@ $end_info$
 #include "Interface/Context/Context.h"
 #include "Interface/Core/JIT/x86_64/JITClass.h"
 #include "Interface/HLE/Thunks/Thunks.h"
-#include "Interface/Core/ObjectCache/Relocations.h"
-#include "Interface/ObjCache.h"
+#include "FEXCore/Core/CPURelocations.h"
+#include "Interface/Core/CodeCache/ObjCache.h"
 #include "xbyak/xbyak.h"
 
 #define AOTLOG(...)
@@ -135,7 +135,7 @@ void X86JITCore::InsertGuestRIPMove(Xbyak::Reg Reg, const uint64_t GuestRip) {
   Relocations.emplace_back(MoveABI);
 }
 
-void *X86JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostCode *const HostCode, const Obj::FragmentRelocations *const Relocations) {
+void *X86JITCore::RelocateJITObjectCode(uint64_t Entry, const ObjCacheFragment *const HostCode, const ObjCacheRelocations *const Relocations) {
   AOTLOG("Relocating RIP 0x{:x}", Entry);
 
   if ((getSize() + HostCode->Bytes) > CurrentCodeBuffer->Size) {
@@ -173,7 +173,7 @@ void *X86JITCore::RelocateJITObjectCode(uint64_t Entry, const Obj::FragmentHostC
   return reinterpret_cast<void*>(HostEntry);
 }
 
-bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const Obj::FragmentRelocations *const Relocations) {
+bool X86JITCore::ApplyRelocations(uint64_t GuestEntry, uint64_t CodeEntry, uint64_t CursorEntry, const ObjCacheRelocations *const Relocations) {
   //size_t DataIndex{};
   for (size_t j = 0; j < Relocations->Count; ++j) {
     //const FEXCore::CPU::Relocation *Reloc = reinterpret_cast<const FEXCore::CPU::Relocation *>(&EntryRelocations[DataIndex]);

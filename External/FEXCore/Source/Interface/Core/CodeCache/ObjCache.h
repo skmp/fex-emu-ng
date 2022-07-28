@@ -1,11 +1,11 @@
 #pragma once
 
 #include <string.h>
-#include "Interface/Core/CodeCache.h"
+#include "CodeCache.h"
 
-#include "Interface/Core/ObjectCache/Relocations.h"
+#include <FEXCore/Core/CPURelocations.h>
 
-namespace FEXCore::Obj {  
+namespace FEXCore {  
   constexpr static uint32_t OBJ_CACHE_VERSION = 0x0000'00001;
   constexpr static uint64_t OBJ_CACHE_INDEX_COOKIE = COOKIE_VERSION("FXOI", OBJ_CACHE_VERSION);
   constexpr static uint64_t OBJ_CACHE_DATA_COOKIE = COOKIE_VERSION("FXOD", OBJ_CACHE_VERSION);
@@ -15,36 +15,36 @@ namespace FEXCore::Obj {
     //uint64_t NumRelocations;
     //const char *Relocations;
 
-  struct FragmentHostCode {
+  struct ObjCacheFragment {
     uint64_t Bytes;
     uint8_t Code[0];
   };
 
-  struct FragmentRelocations {
+  struct ObjCacheRelocations {
     size_t Count;
     FEXCore::CPU::Relocation Relocations[0];
   };
 
   struct ObjCacheEntry : CacheEntry {
 
-    auto GetFragmentHostCode() const {
-      return (const FragmentHostCode *)&GetRangeData()[GuestRangeCount];
+    auto GetObjCacheFragment() const {
+      return (const ObjCacheFragment *)&GetRangeData()[GuestRangeCount];
     }
 
-    auto GetFragmentHostCode() {
-      return (FragmentHostCode *)&GetRangeData()[GuestRangeCount];
+    auto GetObjCacheFragment() {
+      return (ObjCacheFragment *)&GetRangeData()[GuestRangeCount];
     }
 
-    auto GetFragmentRelocationData() const {
-      auto v = GetFragmentHostCode();
+    auto GetObjCacheRelocations() const {
+      auto v = GetObjCacheFragment();
       
-      return (const FragmentRelocations *)&v->Code[v->Bytes];
+      return (const ObjCacheRelocations *)&v->Code[v->Bytes];
     }
 
-    auto GetFragmentRelocationData() {
-      auto v = GetFragmentHostCode();
+    auto GetObjCacheRelocations() {
+      auto v = GetObjCacheFragment();
       
-      return (FragmentRelocations *)&v->Code[v->Bytes];
+      return (ObjCacheRelocations *)&v->Code[v->Bytes];
     }
 
     static uint64_t GetInlineSize(const void *HostCode, const size_t HostCodeBytes, const std::vector<FEXCore::CPU::Relocation> &Relocations) {
@@ -55,11 +55,11 @@ namespace FEXCore::Obj {
       return [HostCode, HostCodeBytes, &Relocations](auto *Entry) {
         auto ObjEntry = (ObjCacheEntry*)Entry;
 
-        ObjEntry->GetFragmentHostCode()->Bytes = HostCodeBytes;
-        memcpy(ObjEntry->GetFragmentHostCode()->Code, HostCode, HostCodeBytes);
+        ObjEntry->GetObjCacheFragment()->Bytes = HostCodeBytes;
+        memcpy(ObjEntry->GetObjCacheFragment()->Code, HostCode, HostCodeBytes);
 
-        ObjEntry->GetFragmentRelocationData()->Count = Relocations.size();
-        memcpy(ObjEntry->GetFragmentRelocationData()->Relocations, Relocations.data(), Relocations.size() * sizeof(*Relocations.data()));
+        ObjEntry->GetObjCacheRelocations()->Count = Relocations.size();
+        memcpy(ObjEntry->GetObjCacheRelocations()->Relocations, Relocations.data(), Relocations.size() * sizeof(*Relocations.data()));
       };
     }
   };
@@ -70,17 +70,17 @@ namespace FEXCore::Obj {
     ObjCacheResult(const ObjCacheEntry *const Entry) {
       Entry->toResult(this);
 
-      HostCode = Entry->GetFragmentHostCode();
-      RelocationData = Entry->GetFragmentRelocationData();
+      HostCode = Entry->GetObjCacheFragment();
+      RelocationData = Entry->GetObjCacheRelocations();
     }
     const std::pair<uint64_t, uint64_t> *RangeData;
     uint64_t RangeCount;
-    const FragmentHostCode *HostCode;
-    const FragmentRelocations *RelocationData;
+    const ObjCacheFragment *HostCode;
+    const ObjCacheRelocations *RelocationData;
   };
 
   template <typename FDPairType>
-  auto LoadCacheFile(FDPairType CacheFDs) {
+  auto LoadOBJCache(FDPairType CacheFDs) {
     return CodeCache::LoadFile(CacheFDs->IndexFD, CacheFDs->DataFD, OBJ_CACHE_INDEX_COOKIE, OBJ_CACHE_DATA_COOKIE);
   }
 
