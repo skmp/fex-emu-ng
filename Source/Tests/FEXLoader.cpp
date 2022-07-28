@@ -241,7 +241,7 @@ int main(int argc, char **argv, char **const envp) {
 
   FEX_CONFIG_OPT(SilentLog, SILENTLOG);
   FEX_CONFIG_OPT(IRCache, IRCACHE);
-  FEX_CONFIG_OPT(OBJCache, OBJCACHE);
+  FEX_CONFIG_OPT(ObjCache, OBJCACHE);
   FEX_CONFIG_OPT(AOTGenerate, AOTGENERATE);
   FEX_CONFIG_OPT(OutputLog, OUTPUTLOG);
   FEX_CONFIG_OPT(LDPath, ROOTFS);
@@ -417,7 +417,7 @@ int main(int argc, char **argv, char **const envp) {
     });
   }
 
-  if (IRCache() || OBJCache() || AOTGenerate()) {
+  if (IRCache() || ObjCache() || AOTGenerate()) {
     LogMan::Msg::IFmt("Warning: OBJ/IR Caches are experimental, and might lead to crashes.");
   }
 
@@ -469,7 +469,7 @@ int main(int argc, char **argv, char **const envp) {
     };
   };
 
-  if (OBJCache()) {
+  if (ObjCache()) {
     FEXCore::Context::SetObjCacheOpener(CTX, GetCacheReader(false));
   }
 

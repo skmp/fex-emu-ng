@@ -49,7 +49,7 @@
           "Cache JIT IR Code to drive."
         ]
       },
-      "OBJCache": {
+      "ObjCache": {
         "Type": "uint32",
         "Default": "FEXCore::Config::ConfigCodeCacheMode::CONFIG_CACHE_DISABLED",
         "TextDefault": "disabled",

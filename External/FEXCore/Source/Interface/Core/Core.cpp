@@ -958,10 +958,10 @@ namespace FEXCore::Context {
           }
 
           // Load ObjCache
-          if (Config.OBJCache() && !NamedRegion.Entry->ObjCache) {
+          if (Config.ObjCache() && !NamedRegion.Entry->ObjCache) {
             auto ObjCacheFDs = ObjCacheOpener(NamedRegion.Entry->FileId, NamedRegion.Entry->Filename);
             if (ObjCacheFDs) {
-              NamedRegion.Entry->ObjCache = LoadOBJCache(ObjCacheFDs);
+              NamedRegion.Entry->ObjCache = LoadObjCache(ObjCacheFDs);
             }
           }
 
@@ -976,7 +976,7 @@ namespace FEXCore::Context {
         }
 
         // Obj Cache
-        if (Config.OBJCache() & Config::CONFIG_CACHE_READ && NamedRegion.Entry->ObjCache) {
+        if (Config.ObjCache() & Config::CONFIG_CACHE_READ && NamedRegion.Entry->ObjCache) {
           auto CachedObj = NamedRegion.Entry->ObjCache->Find<ObjCacheResult>(GuestRIP - NamedRegion.VAFileStart, GuestRIP);
 
           if (CachedObj) {
@@ -1164,7 +1164,7 @@ namespace FEXCore::Context {
         }
       }
 
-      if (Config.OBJCache() & Config::CONFIG_CACHE_WRITE && GeneratedCode & CODE_OBJ) {
+      if (Config.ObjCache() & Config::CONFIG_CACHE_WRITE && GeneratedCode & CODE_OBJ) {
         if (NamedRegion.Entry && NamedRegion.Entry->ObjCache) {
           NamedRegion.Entry->ObjCache->Insert<ObjCacheEntry>(GuestRIP - NamedRegion.VAFileStart, GuestRIP, Ranges, CodePtr, DebugData->HostCodeSize, DebugData->Relocations);
         }

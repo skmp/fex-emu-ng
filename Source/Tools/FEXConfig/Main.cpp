@@ -277,30 +277,30 @@ namespace {
       {
         auto Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_OBJCACHE);
 
-        int OBJCache = FEXCore::Config::CONFIG_CACHE_AUTO;
+        int ObjCache = FEXCore::Config::CONFIG_CACHE_AUTO;
         
         if (Value.has_value()) {
-          OBJCache = std::stoi(**Value);
+          ObjCache = std::stoi(**Value);
 
-          if (OBJCache < 0 || OBJCache > FEXCore::Config::CONFIG_CACHE_MAX) {
-            OBJCache = FEXCore::Config::CONFIG_CACHE_DISABLED;
+          if (ObjCache < 0 || ObjCache > FEXCore::Config::CONFIG_CACHE_MAX) {
+            ObjCache = FEXCore::Config::CONFIG_CACHE_DISABLED;
           }
         }
 
         bool CacheChanged = false;
-        ImGui::PushID("OBJCache");
-        CacheChanged |= ImGui::RadioButton("Auto (Off)", &OBJCache, FEXCore::Config::CONFIG_CACHE_AUTO); ImGui::SameLine();
-        CacheChanged |= ImGui::RadioButton("Disabled", &OBJCache, FEXCore::Config::CONFIG_CACHE_DISABLED); ImGui::SameLine();
-        CacheChanged |= ImGui::RadioButton("Read-only", &OBJCache, FEXCore::Config::CONFIG_CACHE_READ); ImGui::SameLine();
-        CacheChanged |= ImGui::RadioButton("Write-only", &OBJCache, FEXCore::Config::CONFIG_CACHE_WRITE); ImGui::SameLine();
-        CacheChanged |= ImGui::RadioButton("Read/Write", &OBJCache, FEXCore::Config::CONFIG_CACHE_READWRITE);
+        ImGui::PushID("ObjCache");
+        CacheChanged |= ImGui::RadioButton("Auto (Off)", &ObjCache, FEXCore::Config::CONFIG_CACHE_AUTO); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Disabled", &ObjCache, FEXCore::Config::CONFIG_CACHE_DISABLED); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Read-only", &ObjCache, FEXCore::Config::CONFIG_CACHE_READ); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Write-only", &ObjCache, FEXCore::Config::CONFIG_CACHE_WRITE); ImGui::SameLine();
+        CacheChanged |= ImGui::RadioButton("Read/Write", &ObjCache, FEXCore::Config::CONFIG_CACHE_READWRITE);
         ImGui::PopID();
-        
+
         if (CacheChanged) {
-          if (OBJCache == FEXCore::Config::CONFIG_CACHE_AUTO) {
+          if (ObjCache == FEXCore::Config::CONFIG_CACHE_AUTO) {
             LoadedConfig->Erase(FEXCore::Config::ConfigOption::CONFIG_OBJCACHE);  
           } else {
-            LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_OBJCACHE, std::to_string(OBJCache));
+            LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_OBJCACHE, std::to_string(ObjCache));
           }
           ConfigChanged = true;
         }

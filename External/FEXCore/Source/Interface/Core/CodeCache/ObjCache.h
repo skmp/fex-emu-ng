@@ -80,7 +80,7 @@ namespace FEXCore {
   };
 
   template <typename FDPairType>
-  auto LoadOBJCache(FDPairType CacheFDs) {
+  auto LoadObjCache(FDPairType CacheFDs) {
     return CodeCache::LoadFile(CacheFDs->IndexFD, CacheFDs->DataFD, OBJ_CACHE_INDEX_COOKIE, OBJ_CACHE_DATA_COOKIE);
   }
 
