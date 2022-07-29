@@ -336,16 +336,6 @@
           "Can be useful for Wine applications that rely on stack unwinding"
         ]
       }
-    },
-    "Misc": {
-      "AOTGenerate": {
-        "Type": "bool",
-        "Default": "false",
-        "Desc": [
-          "Scans file for executable code and translates it ahead of time.",
-          "Does not run the executable."
-        ]
-      }
     }
   },
   "UnnamedOptions": {

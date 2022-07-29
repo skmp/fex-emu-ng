@@ -186,6 +186,10 @@ bool RanAsInterpreter(const char *Program) {
   return ExecutedWithFD || strstr(Program, "FEXInterpreter") != nullptr;
 }
 
+bool RanAsAOTGen(const char *Program) {
+  return strstr(Program, "AOTGen") != nullptr;
+}
+
 bool IsInterpreterInstalled() {
   // The interpreter is installed if both the binfmt_misc handlers are available
   // Or if we were originally executed with FD. Which means the interpreter is installed
@@ -198,6 +202,7 @@ bool IsInterpreterInstalled() {
 
 int main(int argc, char **argv, char **const envp) {
   const bool IsInterpreter = RanAsInterpreter(argv[0]);
+  const bool IsAOTGen = RanAsAOTGen(argv[0]);
 
   ExecutedWithFD = getauxval(AT_EXECFD) != 0;
 
@@ -211,6 +216,9 @@ int main(int argc, char **argv, char **const envp) {
   );
 
   if (Program.first.empty()) {
+    if (IsAOTGen) {
+      printf("Usage: %s [options] path/to/executable\n", argv[0]);
+    }
     // Early exit if we weren't passed an argument
     return 0;
   }
@@ -242,7 +250,6 @@ int main(int argc, char **argv, char **const envp) {
   FEX_CONFIG_OPT(SilentLog, SILENTLOG);
   FEX_CONFIG_OPT(IRCache, IRCACHE);
   FEX_CONFIG_OPT(ObjCache, OBJCACHE);
-  FEX_CONFIG_OPT(AOTGenerate, AOTGENERATE);
   FEX_CONFIG_OPT(OutputLog, OUTPUTLOG);
   FEX_CONFIG_OPT(LDPath, ROOTFS);
   FEX_CONFIG_OPT(Environment, ENV);
@@ -421,7 +428,7 @@ int main(int argc, char **argv, char **const envp) {
     LogMan::Msg::IFmt("Warning: OBJ/IR Caches are experimental, and might lead to crashes.");
   }
 
-  if (AOTGenerate()) {
+  if (IsAOTGen) {
     LogMan::Msg::IFmt("Warning: AOT Generation is experimental and might not work.");
   }
 
@@ -482,7 +489,7 @@ int main(int argc, char **argv, char **const envp) {
   }
 
 
-  if (AOTGenerate()) {
+  if (IsAOTGen) {
     for(auto &Section: Loader.Sections) {
       FEX::AOT::AOTGenSection(CTX, Section);
     }
