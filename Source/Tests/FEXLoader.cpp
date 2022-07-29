@@ -417,8 +417,12 @@ int main(int argc, char **argv, char **const envp) {
     });
   }
 
-  if (IRCache() || ObjCache() || AOTGenerate()) {
+  if (IRCache() || ObjCache()) {
     LogMan::Msg::IFmt("Warning: OBJ/IR Caches are experimental, and might lead to crashes.");
+  }
+
+  if (AOTGenerate()) {
+    LogMan::Msg::IFmt("Warning: AOT Generation is experimental and might not work.");
   }
 
   auto GetCacheReader = [](bool IsIR) {

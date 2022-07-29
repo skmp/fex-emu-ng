@@ -537,14 +537,6 @@ namespace {
         ConfigChanged = true;
       }
 
-      ImGui::Text("AOT Options:");
-      Value = LoadedConfig->Get(FEXCore::Config::ConfigOption::CONFIG_AOTGENERATE);
-      bool AOTGenerate = Value.has_value() && **Value == "1";
-      if (ImGui::Checkbox("AOT Generate", &AOTGenerate)) {
-        LoadedConfig->EraseSet(FEXCore::Config::ConfigOption::CONFIG_AOTGENERATE, AOTGenerate ? "1" : "0");
-        ConfigChanged = true;
-      }
-
       ImGui::EndTabItem();
     }
   }

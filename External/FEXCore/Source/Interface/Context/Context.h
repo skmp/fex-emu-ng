@@ -101,7 +101,6 @@ namespace FEXCore::Context {
       FEX_CONFIG_OPT(ABINoPF, ABINOPF);
       FEX_CONFIG_OPT(IRCache, IRCACHE);
       FEX_CONFIG_OPT(ObjCache, OBJCACHE);
-      FEX_CONFIG_OPT(AOTGenerate, AOTGENERATE);
       FEX_CONFIG_OPT(SMCChecks, SMCCHECKS);
       FEX_CONFIG_OPT(Core, CORE);
       FEX_CONFIG_OPT(MaxInstPerBlock, MAXINST);
