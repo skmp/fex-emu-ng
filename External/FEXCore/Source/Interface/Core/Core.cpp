@@ -1000,6 +1000,8 @@ namespace FEXCore::Context {
   }
 
   void Context::CompileBlockJit(FEXCore::Core::CpuStateFrame *Frame, uint64_t GuestRIP) {
+    FHU::ScopedSignalMask sm;
+    
     auto NewBlock = CompileBlock(Frame, GuestRIP);
 
     if (NewBlock == 0) {
@@ -1298,6 +1300,7 @@ namespace FEXCore::Context {
   }
 
   uint64_t HandleSyscall(FEXCore::HLE::SyscallHandler *Handler, FEXCore::Core::CpuStateFrame *Frame, FEXCore::HLE::SyscallArguments *Args) {
+    FHU::ScopedSignalMask sm;
     uint64_t Result{};
     Result = Handler->HandleSyscall(Frame, Args);
     return Result;
