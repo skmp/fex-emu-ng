@@ -18,6 +18,8 @@ $end_info$
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <FEXCore/IR/IREmitter.h>
 
+#include <FEXHeaderUtils/ScopedSignalMask.h>
+
 #include <functional>
 #include <memory>
 #include <stdint.h>
@@ -165,6 +167,8 @@ class DummySyscallHandler: public FEXCore::HLE::SyscallHandler {
 
 int main(int argc, char **argv, char **const envp)
 {
+  FHU::ScopedSignalMask sm;
+
   LogMan::Throw::InstallHandler(AssertHandler);
   LogMan::Msg::InstallHandler(MsgHandler);
 
