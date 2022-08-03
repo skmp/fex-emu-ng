@@ -201,6 +201,8 @@ bool IsInterpreterInstalled() {
 }
 
 int main(int argc, char **argv, char **const envp) {
+  FHU::ScopedSignalHostDefer sm;
+
   const bool IsInterpreter = RanAsInterpreter(argv[0]);
   const bool IsAOTGen = RanAsAOTGen(argv[0]);
 
@@ -412,17 +414,7 @@ int main(int argc, char **argv, char **const envp) {
   FEXCore::Context::SetSyscallHandler(CTX, SyscallHandler.get());
   FEXCore::Context::InitCore(CTX, Loader.DefaultRIP(), Loader.GetStackPointer());
 
-  FEXCore::Context::ExitReason ShutdownReason = FEXCore::Context::ExitReason::EXIT_SHUTDOWN;
-
-  // There might already be an exit handler, leave it installed
-  if(!FEXCore::Context::GetExitHandler(CTX)) {
-    FEXCore::Context::SetExitHandler(CTX, [&](uint64_t thread, FEXCore::Context::ExitReason reason) {
-      if (reason != FEXCore::Context::ExitReason::EXIT_DEBUG) {
-        ShutdownReason = reason;
-        FEXCore::Context::Stop(CTX);
-      }
-    });
-  }
+  auto ShutdownReason = FEXCore::Context::ExitReason::EXIT_SHUTDOWN;
 
   if (IRCache() || ObjCache()) {
     LogMan::Msg::IFmt("Warning: OBJ/IR Caches are experimental, and might lead to crashes.");
@@ -490,11 +482,13 @@ int main(int argc, char **argv, char **const envp) {
 
 
   if (IsAOTGen) {
-    for(auto &Section: Loader.Sections) {
+    auto Sections = Loader.PullSections();
+
+    for(auto &Section: Sections) {
       FEX::AOT::AOTGenSection(CTX, Section);
     }
   } else {
-    FEXCore::Context::RunUntilExit(CTX);
+    ShutdownReason = FEXCore::Context::RunUntilExit(CTX);
   }
 
   auto ProgramStatus = FEXCore::Context::GetProgramStatus(CTX);
@@ -505,8 +499,6 @@ int main(int argc, char **argv, char **const envp) {
 
   FEXCore::Context::ShutdownStaticTables();
   FEXCore::Threads::Shutdown();
-
-  Loader.FreeSections();
 
   FEXCore::Config::Shutdown();
 

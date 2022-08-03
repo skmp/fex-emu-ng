@@ -28,6 +28,8 @@ $end_info$
 #include <FEXCore/Utils/Allocator.h>
 #include <FEXCore/Utils/CompilerDefs.h>
 
+#include <FEXHeaderUtils/ScopedSignalMask.h>
+
 #include "Interface/Core/Interpreter/InterpreterOps.h"
 
 #include <sys/mman.h>
@@ -370,6 +372,8 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
 
 
 static uint64_t Arm64JITCore_ExitFunctionLink(FEXCore::Core::CpuStateFrame *Frame, uint64_t *record) {
+  FHU::ScopedSignalHostDefer sm;
+
   auto Thread = Frame->Thread;
   auto GuestRip = record[1];
 
@@ -496,7 +500,13 @@ Arm64JITCore::Arm64JITCore(FEXCore::Context::Context *ctx, FEXCore::Core::Intern
     }
 
     Common.SyscallHandlerObj = reinterpret_cast<uint64_t>(CTX->SyscallHandler);
-    Common.SyscallHandlerFunc = reinterpret_cast<uint64_t>(FEXCore::Context::HandleSyscall);
+    Common.SyscallHandlerFunc = reinterpret_cast<uintptr_t>(&FEXCore::Context::HandleSyscall);
+    
+    {
+      FEXCore::Utils::MemberFunctionToPointerCast PMF(&FEXCore::Context::Context::CompileBlockJit);
+      Common.TranslateGuestCode = PMF.GetConvertedPointer();
+    }
+
     Common.ExitFunctionLink = reinterpret_cast<uintptr_t>(&Arm64JITCore_ExitFunctionLink);
 
 
@@ -528,7 +538,10 @@ void Arm64JITCore::InitializeSignalHandlers(FEXCore::Context::Context *CTX) {
       return false;
     }
 
-    return FEXCore::ArchHelpers::Arm64::HandleSIGBUS(Thread->CTX->Config.ParanoidTSO(), Signal, info, ucontext);
+    SignalDelegator::DeliverThreadHostDeferredSignals();
+    auto rv = FEXCore::ArchHelpers::Arm64::HandleSIGBUS(true, Signal, info, ucontext);
+    SignalDelegator::DeferThreadHostSignals();
+    return rv;
   }, true);
 }
 

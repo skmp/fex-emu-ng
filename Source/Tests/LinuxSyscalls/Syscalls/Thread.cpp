@@ -300,9 +300,10 @@ namespace FEX::HLE {
       }
 
       Thread->StatusCode = status;
-      FEXCore::Context::StopThread(Thread->CTX, Thread);
+      FEXCore::Context::ExitCurrentThread(Thread);
 
-      return 0;
+      // should never reach here
+      std::terminate();
     });
 
     REGISTER_SYSCALL_IMPL_PASS_FLAGS(kill, SyscallFlags::DEFAULT, [](FEXCore::Core::CpuStateFrame *Frame, pid_t pid, int sig) -> uint64_t {
@@ -509,7 +510,7 @@ namespace FEX::HLE {
       auto Thread = Frame->Thread;
       Thread->StatusCode = status;
       FEXCore::Context::Stop(Thread->CTX);
-      // This will never be reached
+      // This must never be reached
       std::terminate();
     });
 

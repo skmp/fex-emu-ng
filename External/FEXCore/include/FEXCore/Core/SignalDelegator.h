@@ -3,6 +3,7 @@
 #include <FEXCore/Utils/CompilerDefs.h>
 
 #include <array>
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <utility>
@@ -83,8 +84,17 @@ namespace Core {
     // 64 is used internally by Valgrind
     constexpr static size_t SIGNAL_FOR_PAUSE {63};
 
+    static void DeferThreadHostSignals();
+    static void DeliverThreadHostDeferredSignals();
+
+    static void EnterAutoHostDefer();
+    static void LeaveAutoHostDefer();
+
+    static bool AcquireHostDeferredSignals();
+    static void ReleaseHostDeferredSignals();
+
   protected:
-    FEXCore::Core::InternalThreadState *GetTLSThread();
+    static FEXCore::Core::InternalThreadState *GetTLSThread();
     virtual void HandleGuestSignal(FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext) = 0;
 
     /**
@@ -111,6 +121,7 @@ namespace Core {
     std::array<HostSignalHandler, MAX_SIGNALS + 1> HostHandlers{};
 
   protected:
+
     void SetHostSignalHandler(int Signal, HostSignalDelegatorFunction Func, bool Required) {
       HostHandlers[Signal].Handlers.push_back(std::move(Func));
     }

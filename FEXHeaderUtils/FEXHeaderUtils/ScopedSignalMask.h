@@ -3,71 +3,51 @@
 #include <FEXCore/Utils/CompilerDefs.h>
 #include <FEXCore/Utils/LogManager.h>
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <shared_mutex>
 #include <signal.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <FEXCore/Core/SignalDelegator.h>
 
 namespace FHU {
-  /**
-   * @brief A drop-in replacement for std::lock_guard that masks POSIX signals while the mutex is locked
-   *
-   * Use this class to prevent reentrancy issues of C++ mutexes with certain signal handlers.
-   * Common examples of such issues are:
-   * - C++ mutexes not unlocking due to a signal handler longjmping out of a scope owning the mutex
-   * - The signal handler itself using a mutex that would be re-locked if the handler gets invoked
-   *   again before unlocking
-   *
-   * Ownership of this object may be moved, but it is NOT SAFE to move across threads.
-   *
-   * Constructor order:
-   * 1) Mask signals
-   * 2) Lock Mutex
-   *
-   * Destructor Order:
-   * 1) Unlock Mutex
-   * 2) Unmask signals
-   */
-  template<typename MutexType, void (MutexType::*lock_fn)(), void (MutexType::*unlock_fn)()>
-  class ScopedSignalMaskWithMutexBase final {
-    public:
 
-      ScopedSignalMaskWithMutexBase(MutexType &_Mutex, uint64_t Mask = ~0ULL)
-        : Mutex {&_Mutex} {
-        // Mask all signals, storing the original incoming mask
-        ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &Mask, &OriginalMask, sizeof(OriginalMask));
-
-        // Lock the mutex
-        (Mutex->*lock_fn)();
-      }
-
-      // No copy or assignment possible
-      ScopedSignalMaskWithMutexBase(const ScopedSignalMaskWithMutexBase&) = delete;
-      ScopedSignalMaskWithMutexBase& operator=(ScopedSignalMaskWithMutexBase&) = delete;
-
-      // Only move
-      ScopedSignalMaskWithMutexBase(ScopedSignalMaskWithMutexBase &&rhs)
-       : OriginalMask {rhs.OriginalMask}, Mutex {rhs.Mutex} {
-        rhs.Mutex = nullptr;
-      }
-
-      ~ScopedSignalMaskWithMutexBase() {
-        if (Mutex != nullptr) {
-          // Unlock the mutex
-          (Mutex->*unlock_fn)();
-
-          // Unmask back to the original signal mask
-          ::syscall(SYS_rt_sigprocmask, SIG_SETMASK, &OriginalMask, nullptr, sizeof(OriginalMask));
-        }
-      }
-    private:
-      uint64_t OriginalMask{};
-      MutexType *Mutex;
+  // Marks a scope as deferring host signals
+  struct ScopedSignalHostDefer {
+    ScopedSignalHostDefer() { FEXCore::SignalDelegator::DeferThreadHostSignals(); }
+    ~ScopedSignalHostDefer() { FEXCore::SignalDelegator::DeliverThreadHostDeferredSignals(); }
   };
 
-  using ScopedSignalMaskWithMutex = ScopedSignalMaskWithMutexBase<std::mutex, &std::mutex::lock, &std::mutex::unlock>;
-  using ScopedSignalMaskWithSharedLock = ScopedSignalMaskWithMutexBase<std::shared_mutex, &std::shared_mutex::lock_shared, &std::shared_mutex::unlock_shared>;
-  using ScopedSignalMaskWithUniqueLock = ScopedSignalMaskWithMutexBase<std::shared_mutex, &std::shared_mutex::lock, &std::shared_mutex::unlock>;
+  // Marks a scope as deferring host signals whenever inside a nested ScopedSignalMask
+  struct ScopedSignalAutoHostDefer {
+    ScopedSignalAutoHostDefer() { FEXCore::SignalDelegator::EnterAutoHostDefer(); }
+    ~ScopedSignalAutoHostDefer() { FEXCore::SignalDelegator::LeaveAutoHostDefer(); }
+  };
+
+  // Marks a scope as requiring host deferred signals
+  struct ScopedSignalMask {
+    std::atomic<bool> HasAcquired;
+    ScopedSignalMask() { HasAcquired.store(FEXCore::SignalDelegator::AcquireHostDeferredSignals(), std::memory_order_relaxed); }
+    ~ScopedSignalMask() { if (HasAcquired.exchange(false, std::memory_order_relaxed)) { FEXCore::SignalDelegator::ReleaseHostDeferredSignals(); } }
+
+    ScopedSignalMask(const ScopedSignalMask&) = delete;
+    ScopedSignalMask& operator=(ScopedSignalMask&) = delete;
+    ScopedSignalMask(ScopedSignalMask &&rhs): HasAcquired(rhs.HasAcquired.exchange(false, std::memory_order_relaxed)) { }
+  };
+
+  // Marks as requiring host deferred signals before T's ctor, and til after T's dtor
+  template<typename T>
+  struct ScopedSignalMaskWith: ScopedSignalMask, T { using T::T; };
+
+  // std::lock_guard<std::mutex> drop in replacement
+  using ScopedSignalMaskWithLockGuard = ScopedSignalMaskWith<std::lock_guard<std::mutex>>;
+
+  // std::lock_guard<std::shared_mutex> drop in replacement
+  using ScopedSignalMaskWithUniqueLockGuard = ScopedSignalMaskWith<std::lock_guard<std::shared_mutex>>;
+  // std::unique_lock<std::shared_mutex> drop in replacement
+  using ScopedSignalMaskWithUniqueLock = ScopedSignalMaskWith<std::unique_lock<std::shared_mutex>>;
+  // std::shared_lock<std::shared_mutex> drop in replacement
+  using ScopedSignalMaskWithSharedLock = ScopedSignalMaskWith<std::shared_lock<std::shared_mutex>>;
 }

@@ -18,7 +18,8 @@ $end_info$
 #include <FEXCore/HLE/SyscallHandler.h>
 #include <FEXCore/IR/IREmitter.h>
 
-#include <csetjmp>
+#include <FEXHeaderUtils/ScopedSignalMask.h>
+
 #include <functional>
 #include <memory>
 #include <stdint.h>
@@ -166,6 +167,8 @@ class DummySyscallHandler: public FEXCore::HLE::SyscallHandler {
 
 int main(int argc, char **argv, char **const envp)
 {
+  FHU::ScopedSignalHostDefer sm;
+
   LogMan::Throw::InstallHandler(AssertHandler);
   LogMan::Msg::InstallHandler(MsgHandler);
 
@@ -203,32 +206,16 @@ int main(int argc, char **argv, char **const envp)
   {
     FEXCore::Context::InitCore(CTX, Loader.DefaultRIP(), Loader.GetStackPointer());
 
-    auto ShutdownReason = FEXCore::Context::ExitReason::EXIT_SHUTDOWN;
+    SignalDelegation->RegisterFrontendHostSignalHandler(SIGSEGV, [](FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext) {
+      FEXCore::Context::ExitCurrentThread(Thread);
 
-    // There might already be an exit handler, leave it installed
-    if (!FEXCore::Context::GetExitHandler(CTX))
-    {
-      FEXCore::Context::SetExitHandler(CTX, [&](uint64_t thread, FEXCore::Context::ExitReason reason) {
-        if (reason != FEXCore::Context::ExitReason::EXIT_DEBUG)
-        {
-          ShutdownReason = reason;
-          FEXCore::Context::Stop(CTX);
-        }
-      });
-    }
+      //unreachable
+      std::terminate();
 
-    jmp_buf LongJump{};
-    int LongJumpVal{};
-
-    SignalDelegation->RegisterFrontendHostSignalHandler(SIGSEGV, [&LongJump](FEXCore::Core::InternalThreadState *Thread, int Signal, void *info, void *ucontext) {
-      longjmp(LongJump, 1);
       return false;
     }, true);
 
-    LongJumpVal = setjmp(LongJump);
-    if (!LongJumpVal) {
-      FEXCore::Context::RunUntilExit(CTX);
-    }
+    auto ShutdownReason = FEXCore::Context::RunUntilExit(CTX);
 
     LogMan::Msg::DFmt("Reason we left VM: {}", ShutdownReason);
 
