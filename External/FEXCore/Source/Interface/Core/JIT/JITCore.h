@@ -20,6 +20,8 @@ CPUBackendFeatures GetX86JITBackendFeatures();
 
 [[nodiscard]] std::unique_ptr<CPUBackend> CreateArm64JITCore(FEXCore::Context::Context *ctx,
                                                              FEXCore::Core::InternalThreadState *Thread);
+[[nodiscard]] std::unique_ptr<CPUBackend> CreateArm64JITSIMCore(FEXCore::Context::Context *ctx,
+                                                             FEXCore::Core::InternalThreadState *Thread);
 void InitializeArm64JITSignalHandlers(FEXCore::Context::Context *CTX);
 CPUBackendFeatures GetArm64JITBackendFeatures();
 

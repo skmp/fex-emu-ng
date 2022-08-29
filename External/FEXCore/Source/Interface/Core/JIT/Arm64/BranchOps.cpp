@@ -16,6 +16,10 @@ $end_info$
 #include <FEXCore/Utils/MathUtils.h>
 #include <Interface/HLE/Thunks/Thunks.h>
 
+#if defined (_M_X86_64)
+#include <aarch64/simulator-aarch64.h>
+#endif
+
 namespace FEXCore::CPU {
 using namespace vixl;
 using namespace vixl::aarch64;
@@ -197,7 +201,13 @@ DEF_OP(Syscall) {
   ldr(x3, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.SyscallHandlerFunc)));
   mov(x1, STATE);
   mov(x2, sp);
-  blr(x3);
+
+  if (UseSimulator) {
+    hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+    dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<void, void *, void *, void *>::Wrapper)));
+  } else {
+    blr(x3);
+  }
 
   add(sp, sp, SPOffset);
 
@@ -448,7 +458,12 @@ DEF_OP(ThreadRemoveCodeEntry) {
 
   ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.ThreadRemoveCodeEntryFromJIT)));
   SpillStaticRegs();
-  blr(x2);
+  if (UseSimulator) {
+    hlt(kRuntimeCallIndirectOpcodeFirst + 2);
+    dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<void, void *, uint64_t>::Wrapper)));
+  } else {
+    blr(x2);
+  }
   FillStaticRegs();
 
   // Fix the stack and any values that were stepped on
@@ -468,7 +483,12 @@ DEF_OP(CPUID) {
   mov(x1, GetReg<RA_64>(Op->Function.ID()));
   mov(x2, GetReg<RA_64>(Op->Leaf.ID()));
   SpillStaticRegs();
-  blr(x3);
+  if (UseSimulator) {
+    hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+    dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<FEXCore::CPUID::FunctionResults, void *, uint32_t, uint32_t>::Wrapper)));
+  } else {
+    blr(x3);
+  }
   FillStaticRegs();
 
   PopDynamicRegsAndLR();

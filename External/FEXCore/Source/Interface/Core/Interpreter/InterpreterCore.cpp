@@ -18,14 +18,6 @@
 
 #include "InterpreterOps.h"
 
-#if defined(_M_X86_64)
-  #include "Interface/Core/Dispatcher/X86Dispatcher.h"
-#elif defined(_M_ARM_64)
-  #include "Interface/Core/Dispatcher/Arm64Dispatcher.h"
-#else
-  #error missing arch
-#endif
-
 static constexpr size_t INITIAL_CODE_SIZE = 1024 * 1024 * 16;
 static constexpr size_t MAX_CODE_SIZE = 1024 * 1024 * 128;
 

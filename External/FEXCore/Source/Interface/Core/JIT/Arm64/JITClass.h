@@ -44,7 +44,8 @@ using namespace vixl::aarch64;
 class Arm64JITCore final : public CPUBackend, public Arm64Emitter  {
 public:
   explicit Arm64JITCore(FEXCore::Context::Context *ctx,
-                        FEXCore::Core::InternalThreadState *Thread);
+                        FEXCore::Core::InternalThreadState *Thread,
+                        bool UseSimulator);
   ~Arm64JITCore() override;
 
   [[nodiscard]] std::string GetName() override { return "JIT"; }
@@ -67,6 +68,7 @@ public:
 private:
   FEX_CONFIG_OPT(ParanoidTSO, PARANOIDTSO);
   const bool CanUseSVE{};
+  const bool UseSimulator;
 
   Label *PendingTargetLabel;
   FEXCore::Context::Context *CTX;

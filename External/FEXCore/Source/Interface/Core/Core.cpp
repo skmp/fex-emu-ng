@@ -231,6 +231,12 @@ namespace FEXCore::Context {
     case FEXCore::Config::CONFIG_CUSTOM:
       // Do nothing
       break;
+#if (_M_X86_64 && JIT_ARM64)
+    case FEXCore::Config::CONFIG_IRJITSIM:
+      //FEXCore::CPU::InitializeX86JITSignalHandlers(this);
+      BackendFeatures = FEXCore::CPU::GetArm64JITBackendFeatures();
+    break;
+#endif
     default:
       ERROR_AND_DIE_FMT("Unknown core configuration");
       break;
@@ -238,9 +244,16 @@ namespace FEXCore::Context {
 
     DispatcherConfig.StaticRegisterAllocation = Config.StaticRegisterAllocation && BackendFeatures.SupportsStaticRegisterAllocation;
 
-#if (_M_X86_64)
-    Dispatcher = FEXCore::CPU::Dispatcher::CreateX86(this, DispatcherConfig);
-#elif (_M_ARM_64)
+#if defined(_M_X86_64)
+  #if defined(JIT_ARM64)
+    if (Config.Core == FEXCore::Config::CONFIG_IRJITSIM) {
+      Dispatcher = FEXCore::CPU::Dispatcher::CreateArm64Sim(this, DispatcherConfig);  
+    } else 
+  #endif
+    {
+      Dispatcher = FEXCore::CPU::Dispatcher::CreateX86(this, DispatcherConfig);
+    }
+#elif defined(_M_ARM_64)
     Dispatcher = FEXCore::CPU::Dispatcher::CreateArm64(this, DispatcherConfig);
 #else
     ERROR_AND_DIE_FMT("FEXCore has been compiled with an unknown target");
@@ -556,7 +569,7 @@ namespace FEXCore::Context {
 
     bool DoSRA = DispatcherConfig.StaticRegisterAllocation;
 
-    Thread->PassManager->AddDefaultPasses(this, Config.Core == FEXCore::Config::CONFIG_IRJIT, DoSRA);
+    Thread->PassManager->AddDefaultPasses(this, Config.Core == FEXCore::Config::CONFIG_IRJIT || Config.Core == FEXCore::Config::CONFIG_IRJITSIM, DoSRA);
     Thread->PassManager->AddDefaultValidationPasses();
 
     Thread->PassManager->RegisterSyscallHandler(SyscallHandler);
@@ -583,6 +596,12 @@ namespace FEXCore::Context {
     case FEXCore::Config::CONFIG_CUSTOM:
       Thread->CPUBackend = CustomCPUFactory(this, Thread);
       break;
+#if (_M_X86_64 && JIT_ARM64)
+    case FEXCore::Config::CONFIG_IRJITSIM:
+      Thread->PassManager->InsertRegisterAllocationPass(DoSRA, HostFeatures.SupportsAVX);
+      Thread->CPUBackend = FEXCore::CPU::CreateArm64JITSIMCore(this, Thread);
+    break;
+#endif
     default:
       ERROR_AND_DIE_FMT("Unknown core configuration");
       break;

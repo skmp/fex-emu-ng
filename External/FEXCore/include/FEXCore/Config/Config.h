@@ -20,6 +20,8 @@ namespace Handler {
 #ifdef _M_X86_64
     else if (Value == "host")
       return "2";
+    else if (Value == "irjitsim")
+      return "3";
 #endif
     return "1";
   }
@@ -55,6 +57,7 @@ namespace Handler {
     CONFIG_INTERPRETER,
     CONFIG_IRJIT,
     CONFIG_CUSTOM,
+    CONFIG_IRJITSIM,
   };
 
   enum ConfigSMCChecks {

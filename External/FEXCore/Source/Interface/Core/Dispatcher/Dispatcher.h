@@ -75,12 +75,13 @@ public:
 
   static std::unique_ptr<Dispatcher> CreateX86(FEXCore::Context::Context *CTX, const DispatcherConfig &Config);
   static std::unique_ptr<Dispatcher> CreateArm64(FEXCore::Context::Context *CTX, const DispatcherConfig &Config);
+  static std::unique_ptr<Dispatcher> CreateArm64Sim(FEXCore::Context::Context *CTX, const DispatcherConfig &Config);
   
-  void ExecuteDispatch(FEXCore::Core::CpuStateFrame *Frame) {
+  virtual void ExecuteDispatch(FEXCore::Core::CpuStateFrame *Frame) {
     DispatchPtr(Frame);
   }
 
-  void ExecuteJITCallback(FEXCore::Core::CpuStateFrame *Frame, uint64_t RIP) {
+  virtual void ExecuteJITCallback(FEXCore::Core::CpuStateFrame *Frame, uint64_t RIP) {
     CallbackPtr(Frame, RIP);
   }
 

@@ -196,6 +196,9 @@ if (ENABLE_JIT_X86_64)
 endif()
 
 if (ENABLE_JIT_ARM64)
+  if (_M_X86_64)
+    list(APPEND DEFINES -DVIXL_INCLUDE_SIMULATOR_AARCH64)
+  endif()
   list(APPEND DEFINES -DJIT_ARM64)
   list(APPEND SRCS
     Interface/Core/JIT/Arm64/JIT.cpp

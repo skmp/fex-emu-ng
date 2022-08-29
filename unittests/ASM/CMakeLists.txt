@@ -57,7 +57,12 @@ foreach(ASM_SRC ${ASM_SOURCES})
   if (_M_X86_64)
     list(APPEND TEST_ARGS
       "--no-silent -g -c host"       "host"      "host"
-      )
+    )
+
+    ### TODO only for sim builds
+    list(APPEND TEST_ARGS
+      "--no-silent -g -c irjitsim -n 500 --multiblock" "jitsim_500_m"      "jit"
+    )
   endif()
 
   if (ENABLE_INTERPRETER)

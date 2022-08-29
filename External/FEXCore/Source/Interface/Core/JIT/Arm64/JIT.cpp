@@ -10,12 +10,12 @@ desc: Main glue logic of the arm64 splatter backend
 $end_info$
 */
 
+#include "Common/SoftFloat.h"
 #include "Interface/Context/Context.h"
 #include "Interface/Core/LookupCache.h"
 
 #include "Interface/Core/ArchHelpers/Arm64.h"
 #include "Interface/Core/ArchHelpers/MContext.h"
-#include "Interface/Core/Dispatcher/Arm64Dispatcher.h"
 #include "Interface/Core/JIT/Arm64/JITClass.h"
 #include "Interface/Core/InternalThreadState.h"
 
@@ -35,6 +35,16 @@ $end_info$
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
+
+
+#if defined (_M_X86_64)
+#include <aarch64/simulator-aarch64.h>
+#endif
+
+struct X80SoftFloat16B {
+  uint64_t low;
+  uint64_t hi;
+};
 
 static constexpr size_t INITIAL_CODE_SIZE = 1024 * 1024 * 16;
 // We don't want to move above 128MB atm because that means we will have to encode longer jumps
@@ -94,7 +104,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
 
         uxth(w0, GetReg<RA_32>(IROp->Args[0].ID()));
         ldr(x1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x1);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 1);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<void, uint16_t>::Wrapper)));
+        } else {
+          blr(x1);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -109,7 +124,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
 
         fmov(v0.S(), GetSrc(IROp->Args[0].ID()).S()) ;
         ldr(x0, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x0);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 0);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<X80SoftFloat16B, float>::Wrapper)));
+        } else {
+          blr(x0);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -128,7 +148,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
 
         mov(v0.D(), GetSrc(IROp->Args[0].ID()).D());
         ldr(x0, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x0);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 0);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<X80SoftFloat16B, double>::Wrapper)));
+        } else {
+          blr(x0);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -153,7 +178,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
           mov(w0, GetReg<RA_32>(IROp->Args[0].ID()));
         }
         ldr(x1, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x1);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 1);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<X80SoftFloat16B, int16_t>::Wrapper)));
+        } else {
+          blr(x1);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -174,7 +204,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w1, GetSrc(IROp->Args[0].ID()).V8H(), 4);
 
         ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x2);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 2);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<float, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x2);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -193,7 +228,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w1, GetSrc(IROp->Args[0].ID()).V8H(), 4);
 
         ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x2);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 2);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<double, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x2);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -210,7 +250,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
 
         mov(v0.D(), GetSrc(IROp->Args[0].ID()).D());
         ldr(x0, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x0);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 0);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<double, double>::Wrapper)));
+        } else {
+          blr(x0);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -229,7 +274,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         mov(v0.D(), GetSrc(IROp->Args[0].ID()).D());
         mov(v1.D(), GetSrc(IROp->Args[1].ID()).D());
         ldr(x0, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x0);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 0);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<double, double, double>::Wrapper)));
+        } else {
+          blr(x0);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -249,7 +299,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w1, GetSrc(IROp->Args[0].ID()).V8H(), 4);
 
         ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x2);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 0);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<int16_t, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x2);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -267,7 +322,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w1, GetSrc(IROp->Args[0].ID()).V8H(), 4);
 
         ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x2);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 0);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<int32_t, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x2);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -285,7 +345,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w1, GetSrc(IROp->Args[0].ID()).V8H(), 4);
 
         ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x2);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 2);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<int64_t, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x2);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -306,7 +371,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w3, GetSrc(IROp->Args[1].ID()).V8H(), 4);
 
         ldr(x4, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x4);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 4);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<int64_t, X80SoftFloat16B, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x4);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -324,7 +394,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w1, GetSrc(IROp->Args[0].ID()).V8H(), 4);
 
         ldr(x2, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x2);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 2);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<X80SoftFloat16B, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x2);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -347,7 +422,12 @@ void Arm64JITCore::Op_Unhandled(IR::IROp_Header *IROp, IR::NodeID Node) {
         umov(w3, GetSrc(IROp->Args[1].ID()).V8H(), 4);
 
         ldr(x4, MemOperand(STATE, offsetof(FEXCore::Core::CpuStateFrame, Pointers.Common.FallbackHandlerPointers[Info.HandlerIndex])));
-        blr(x4);
+        if (UseSimulator) {
+          hlt(kRuntimeCallIndirectOpcodeFirst + 4);
+          dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<X80SoftFloat16B, X80SoftFloat16B, X80SoftFloat16B>::Wrapper)));
+        } else {
+          blr(x4);
+        }
 
         PopDynamicRegsAndLR();
 
@@ -423,10 +503,11 @@ static uint64_t Arm64JITCore_ExitFunctionLink(FEXCore::Core::CpuStateFrame *Fram
 void Arm64JITCore::Op_NoOp(IR::IROp_Header *IROp, IR::NodeID Node) {
 }
 
-Arm64JITCore::Arm64JITCore(FEXCore::Context::Context *ctx, FEXCore::Core::InternalThreadState *Thread)
+Arm64JITCore::Arm64JITCore(FEXCore::Context::Context *ctx, FEXCore::Core::InternalThreadState *Thread, bool UseSimulator)
   : CPUBackend(Thread, INITIAL_CODE_SIZE, MAX_CODE_SIZE)
   , Arm64Emitter(ctx, 0)
   , CanUseSVE{ctx->HostFeatures.SupportsAVX}
+  , UseSimulator(UseSimulator)
   , CTX {ctx} {
 
   RAPass = Thread->PassManager->GetPass<IR::RegisterAllocationPass>("RA");
@@ -516,8 +597,11 @@ void Arm64JITCore::InitializeSignalHandlers(FEXCore::Context::Context *CTX) {
       // Wasn't a sigbus in JIT code
       return false;
     }
-
+#if defined(_M_ARM_64)
     return FEXCore::ArchHelpers::Arm64::HandleSIGBUS(Thread->CTX->Config.ParanoidTSO(), Signal, info, ucontext);
+#else
+  return false;
+#endif
   }, true);
 }
 
@@ -809,7 +893,11 @@ void Arm64JITCore::ResetStack() {
 }
 
 std::unique_ptr<CPUBackend> CreateArm64JITCore(FEXCore::Context::Context *ctx, FEXCore::Core::InternalThreadState *Thread) {
-  return std::make_unique<Arm64JITCore>(ctx, Thread);
+  return std::make_unique<Arm64JITCore>(ctx, Thread, false);
+}
+
+std::unique_ptr<CPUBackend> CreateArm64JITSIMCore(FEXCore::Context::Context *ctx, FEXCore::Core::InternalThreadState *Thread) {
+  return std::make_unique<Arm64JITCore>(ctx, Thread, true);
 }
 
 void InitializeArm64JITSignalHandlers(FEXCore::Context::Context *CTX) {

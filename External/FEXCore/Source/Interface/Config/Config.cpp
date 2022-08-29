@@ -430,7 +430,8 @@ namespace JSON {
       // Sanitize Core option
       FEX_CONFIG_OPT(Core, CORE);
 #if (_M_X86_64)
-      constexpr uint32_t MaxCoreNumber = 2;
+      /// FIX THIS
+      constexpr uint32_t MaxCoreNumber = 3;
 #else
       constexpr uint32_t MaxCoreNumber = 1;
 #endif

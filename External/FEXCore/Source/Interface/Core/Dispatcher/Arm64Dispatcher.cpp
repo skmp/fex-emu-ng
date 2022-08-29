@@ -1,11 +1,11 @@
 #include "Interface/Core/LookupCache.h"
 
 #include "Interface/Core/ArchHelpers/MContext.h"
-#include "Interface/Core/Dispatcher/Arm64Dispatcher.h"
 #include "Interface/Core/Interpreter/InterpreterClass.h"
 
 #include "Interface/Context/Context.h"
 #include "Interface/Core/X86HelperGen.h"
+#include "aarch64/simulator-constants-aarch64.h"
 
 #include <FEXCore/Core/CPUBackend.h>
 #include <FEXCore/Core/CoreState.h>
@@ -30,8 +30,58 @@
 #include <sys/syscall.h>
 #include <unistd.h>
 
+#if defined (_M_X86_64)
+#include <aarch64/simulator-aarch64.h>
+#endif
+
 #define STATE_PTR(STATE_TYPE, FIELD) \
   MemOperand(STATE, offsetof(FEXCore::Core::STATE_TYPE, FIELD))
+
+
+#include "Interface/Core/ArchHelpers/Arm64Emitter.h"
+#include "Interface/Core/Dispatcher/Dispatcher.h"
+
+namespace FEXCore::Context {
+struct Context;
+}
+
+namespace FEXCore::Core {
+struct InternalThreadState;
+}
+
+namespace FEXCore::CPU {
+
+class Arm64Dispatcher final : public Dispatcher, public Arm64Emitter {
+  public:
+    Arm64Dispatcher(FEXCore::Context::Context *ctx, const DispatcherConfig &config, bool UseSimulator);
+    void InitThreadPointers(FEXCore::Core::InternalThreadState *Thread) override;
+    size_t GenerateGDBPauseCheck(uint8_t *CodeBuffer, uint64_t GuestRIP) override;
+    size_t GenerateInterpreterTrampoline(uint8_t *CodeBuffer) override;
+
+  void ExecuteDispatch(FEXCore::Core::CpuStateFrame *Frame) override;
+
+  void ExecuteJITCallback(FEXCore::Core::CpuStateFrame *Frame, uint64_t RIP) override;
+
+  protected:
+    void SpillSRA(FEXCore::Core::InternalThreadState *Thread, void *ucontext, uint32_t IgnoreMask) override;
+
+  private:
+    // Long division helpers
+    uint64_t LUDIVHandlerAddress{};
+    uint64_t LDIVHandlerAddress{};
+    uint64_t LUREMHandlerAddress{};
+    uint64_t LREMHandlerAddress{};
+
+    const bool UseSimulator;
+
+    #if defined(_M_X86_64)
+      vixl::aarch64::Decoder decoder;
+      vixl::aarch64::Simulator simulator;
+    #endif
+};
+
+}
+
 
 namespace FEXCore::CPU {
 
@@ -41,10 +91,30 @@ using namespace vixl::aarch64;
 static constexpr size_t MAX_DISPATCHER_CODE_SIZE = 4096;
 #define STATE x28
 
-Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const DispatcherConfig &config)
-  : FEXCore::CPU::Dispatcher(ctx, config), Arm64Emitter(ctx, MAX_DISPATCHER_CODE_SIZE) {
+void Arm64Dispatcher::ExecuteDispatch(FEXCore::Core::CpuStateFrame *Frame) {
+  if (UseSimulator) {
+    simulator.WriteXRegister(0, intptr_t(Frame));
+    simulator.RunFrom((Instruction*)DispatchPtr);
+  } else {
+    DispatchPtr(Frame);
+  }
+}
+
+void Arm64Dispatcher::ExecuteJITCallback(FEXCore::Core::CpuStateFrame *Frame, uint64_t RIP) {
+  if (UseSimulator) {
+    simulator.WriteXRegister(0, intptr_t(Frame));
+    simulator.WriteXRegister(1, RIP);
+    simulator.RunFrom((Instruction*)DispatchPtr);
+  } else {
+    CallbackPtr(Frame, RIP);
+  }
+}
+  
+Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const DispatcherConfig &config, bool UseSimulator)
+  : FEXCore::CPU::Dispatcher(ctx, config), Arm64Emitter(ctx, MAX_DISPATCHER_CODE_SIZE), UseSimulator(UseSimulator), simulator(&decoder) {
   SetAllowAssembler(true);
 
+  simulator.SetTraceParameters(LOG_ALL);
   DispatchPtr = GetCursorAddress<AsmDispatch>();
 
   // while (true) {
@@ -178,7 +248,8 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     ret();
   }
 
-  constexpr bool SignalSafeCompile = true;
+  // Simulator doesn't support SignalSafeCompile
+  bool SignalSafeCompile = !UseSimulator;
   {
     ExitFunctionLinkerAddress = GetCursorAddress<uint64_t>();
     if (config.StaticRegisterAllocation)
@@ -207,7 +278,13 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     mov(x1, lr);
 
     ldr(x3, STATE_PTR(CpuStateFrame, Pointers.Common.ExitFunctionLink));
-    blr(x3);
+    
+    if (UseSimulator) {
+      hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+      dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<uint64_t, void *, void *>::Wrapper)));
+    } else {
+      blr(x3);
+    }
 
     if (SignalSafeCompile) {
       // Now restore the signal mask
@@ -266,7 +343,12 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     ldr(x3, &l_CompileBlock);
 
     // X2 contains our guest RIP
-    blr(x3); // { CTX, Frame, RIP}
+    if (UseSimulator) {
+      hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+      dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<uint64_t, void *, void *, uint64_t>::Wrapper)));
+    } else {
+      blr(x3); // { CTX, Frame, RIP}
+    }
 
 
     if (SignalSafeCompile) {
@@ -349,7 +431,12 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     ldr(x0, &l_CTX);
     mov(x1, STATE);
     ldr(x2, &l_Sleep);
-    blr(x2);
+    if (UseSimulator) {
+      hlt(kRuntimeCallIndirectOpcodeFirst + 2);
+      dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<void, void *, void *>::Wrapper)));
+    } else {
+      blr(x2);
+    }
 
     PauseReturnInstruction = GetCursorAddress<uint64_t>();
     // Fault to start running again
@@ -416,7 +503,12 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     ldr(x3, STATE_PTR(CpuStateFrame, Pointers.AArch64.LUDIV));
 
     SpillStaticRegs();
-    blr(x3);
+    if (UseSimulator) {
+      hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+      dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<uint64_t, uint64_t, uint64_t, uint64_t>::Wrapper)));
+    } else {
+      blr(x3);
+    }
     FillStaticRegs();
 
     // Result is now in x0
@@ -435,7 +527,12 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     ldr(x3, STATE_PTR(CpuStateFrame, Pointers.AArch64.LDIV));
 
     SpillStaticRegs();
-    blr(x3);
+    if (UseSimulator) {
+      hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+      dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<uint64_t, uint64_t, uint64_t, uint64_t>::Wrapper)));
+    } else {
+      blr(x3);
+    }
     FillStaticRegs();
 
     // Result is now in x0
@@ -454,7 +551,12 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     ldr(x3, STATE_PTR(CpuStateFrame, Pointers.AArch64.LUREM));
 
     SpillStaticRegs();
-    blr(x3);
+    if (UseSimulator) {
+      hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+      dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<uint64_t, uint64_t, uint64_t, uint64_t>::Wrapper)));
+    } else {
+      blr(x3);
+    }
     FillStaticRegs();
 
     // Result is now in x0
@@ -473,7 +575,12 @@ Arm64Dispatcher::Arm64Dispatcher(FEXCore::Context::Context *ctx, const Dispatche
     ldr(x3, STATE_PTR(CpuStateFrame, Pointers.AArch64.LREM));
 
     SpillStaticRegs();
-    blr(x3);
+    if (UseSimulator) {
+      hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+      dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<uint64_t, uint64_t, uint64_t, uint64_t>::Wrapper)));
+    } else {
+      blr(x3);
+    }
     FillStaticRegs();
 
     // Result is now in x0
@@ -557,7 +664,13 @@ size_t Arm64Dispatcher::GenerateInterpreterTrampoline(uint8_t *CodeBuffer) {
   emit.adr(x1, &InlineIRData);
 
   emit.ldr(x3, STATE_PTR(CpuStateFrame, Pointers.Interpreter.FragmentExecuter));
-  emit.blr(x3);
+
+  if (UseSimulator) {
+    hlt(kRuntimeCallIndirectOpcodeFirst + 3);
+    dc(reinterpret_cast<uintptr_t>(&(Simulator::RuntimeCallStructHelper<void, void *, void *>::Wrapper)));
+  } else {
+    emit.blr(x3);
+  }
 
   emit.ldr(x0, STATE_PTR(CpuStateFrame, Pointers.Common.DispatcherLoopTop));
   emit.br(x0);
@@ -617,7 +730,11 @@ void Arm64Dispatcher::InitThreadPointers(FEXCore::Core::InternalThreadState *Thr
 }
 
 std::unique_ptr<Dispatcher> Dispatcher::CreateArm64(FEXCore::Context::Context *CTX, const DispatcherConfig &Config) {
-  return std::make_unique<Arm64Dispatcher>(CTX, Config);
+  return std::make_unique<Arm64Dispatcher>(CTX, Config, false);
+}
+
+std::unique_ptr<Dispatcher> Dispatcher::CreateArm64Sim(FEXCore::Context::Context *CTX, const DispatcherConfig &Config) {
+  return std::make_unique<Arm64Dispatcher>(CTX, Config, true);
 }
 
 }
